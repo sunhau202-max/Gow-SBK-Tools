@@ -1,4 +1,4 @@
-name: Build EXE
+name: Build SBK Tools
 
 on:
   push:
@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Python 3.10 dipilih supaya exe jalan mulus di Wine/Winlator
+      # Python 3.10 dipilih supaya hasilnya jalan mulus di Wine/Winlator
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
@@ -24,37 +24,42 @@ jobs:
       - name: Install PyInstaller
         run: python -m pip install --upgrade pip pyinstaller
 
-      # 1) Versi utama: satu file exe tanpa jendela console
-      - name: Build EXE (utama)
-        run: python -m PyInstaller --noconfirm --onefile --windowed --name GoW_SBK_Tool gow_wad_sbk_tool.py
+      # Versi FOLDER (onedir): tidak mengekstrak ke temp, stabil di Winlator
+      - name: Build program (folder)
+        run: python -m PyInstaller --noconfirm --onedir --windowed --name SBK_Tools --icon icon.ico gow_wad_sbk_tool.py
 
-      # 2) Versi debug: ada jendela console, menampilkan error kalau gagal start
-      - name: Build EXE (debug console)
-        run: python -m PyInstaller --noconfirm --onefile --console --name GoW_SBK_Tool_debug --distpath dist_debug --workpath build_debug gow_wad_sbk_tool.py
+      # Versi debug dengan jendela console (menampilkan error kalau gagal start)
+      - name: Build debug (console)
+        run: python -m PyInstaller --noconfirm --onedir --console --name SBK_Tools_debug --icon icon.ico --distpath dist_debug --workpath build_debug gow_wad_sbk_tool.py
 
-      # 3) Versi folder: tidak mengekstrak ke temp, kadang lebih stabil di Winlator
-      - name: Build folder (onedir)
-        run: python -m PyInstaller --noconfirm --onedir --windowed --name GoW_SBK_Tool_folder --distpath dist_folder --workpath build_folder gow_wad_sbk_tool.py
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: GoW_SBK_Tool
-          path: dist/GoW_SBK_Tool.exe
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: GoW_SBK_Tool_debug
-          path: dist_debug/GoW_SBK_Tool_debug.exe
+      # Rakit paket:  SBK Tools.zip
+      #   Readme-Indo/Eng, Leia-me-Br, Informasi-Indo, Information-Eng, Informacoes-Br, Katalog_SBK
+      #   SBK Tools\  (SBK_Tools.exe + DLL dan file pendukung)
+      - name: Assemble package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path stage | Out-Null
+          Copy-Item -Path dist/SBK_Tools -Destination "stage/SBK Tools" -Recurse
+          Copy-Item -Path Readme-Indo.txt, Readme-Eng.txt, Leia-me-Br.txt, Informasi-Indo.txt, Information-Eng.txt, Informacoes-Br.txt, Katalog_SBK.txt -Destination stage/
+          Get-ChildItem stage | Format-Table Name
 
       - uses: actions/upload-artifact@v4
         with:
-          name: GoW_SBK_Tool_folder
-          path: dist_folder/GoW_SBK_Tool_folder/
+          name: SBK Tools
+          path: stage/
 
-      - name: Release (hanya saat tag v*)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SBK Tools debug
+          path: dist_debug/SBK_Tools_debug/
+
+      - name: Zip for release (tag v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: Compress-Archive -Path "stage/*" -DestinationPath "SBK Tools.zip"
+
+      - name: Release (tag v*)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist/GoW_SBK_Tool.exe
-            dist_debug/GoW_SBK_Tool_debug.exe
+          files: SBK Tools.zip
