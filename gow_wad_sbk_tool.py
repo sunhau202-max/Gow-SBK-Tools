@@ -1,16 +1,18 @@
 """
-GoW WAD SBK Tool  (God of War 1 & 2, PS2)
-Buka WAD -> pilih SBK -> Edit audio (Replace dari WAV) -> SAVE.
+Gow SBK Tools by Nicho
+God of War 1 & 2 (PS2): edit the audio of SBK/SBP sound banks inside .WAD files.
+Open a WAD -> pick an SBK -> Edit audio (Replace from WAV) -> SAVE.
+Languages: Bahasa Indonesia, English, Português (Brasil).
 
-Jalankan:  python gow_wad_sbk_tool.py     (Python 3.8+, tanpa library tambahan)
+Run:  python gow_wad_sbk_tool.py      (Python 3.8+, no extra libraries)
 
-Layout WAD (dari analisis 216 WAD GoW 1), stream berurutan:
-  [u32 tag][u32 size][char name[24]]   header 0x20 byte
-  [data sebanyak size]                 lalu padding ke kelipatan 0x10
-Tag tanpa data (size hanya parameter): 0x18, 0x28, 0x32, 0x3E7, 0x29A.
-File = tag 0x1E. SBK dikenali dari 4 byte pertama data: 0x18/0x15 (bank
-dengan audio di dalamnya) atau 0x40018 (bank berisi file VAG terpisah).
+WAD layout (stream of entries):
+  [u32 tag][u32 size][char name[24]]   32-byte header
+  [data of `size` bytes]               then padding to a multiple of 0x10
+GoW 1: first tag 0x378, files = tag 0x1E.  GoW 2: first tag 0x15, files = tag 0x01.
+SBK = first data dword 0x18 (GoW 1), 0x15 (GoW 2) or 0x40018 (VAG bank).
 """
+import json
 import os
 import shutil
 import struct
@@ -20,6 +22,424 @@ import traceback
 import wave
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+
+# Ikon jendela (PNG 64 px, base64). Ikon exe dipasang saat build (icon.ico).
+ICON_B64 = (
+    "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"
+)
+
+# ======================= BAHASA / LANGUAGE / IDIOMA =======================
+APP_NAME = "Gow SBK Tools by Nicho"
+LANGS = (("id", "Bahasa Indonesia"), ("en", "English"), ("pt", "Português (Brasil)"))
+LANG = "en"
+_LI = {"id": 0, "en": 1, "pt": 2}
+
+# kunci: (Indonesia, English, Português-BR)
+I18N = {
+    # ---- tombol & label jendela utama ----
+    "btn_open": ("Buka WAD", "Open WAD", "Abrir WAD"),
+    "btn_edit": ("Edit audio", "Edit audio", "Editar áudio"),
+    "btn_export": ("Export", "Export", "Exportar"),
+    "btn_replace_file": ("Replace file", "Replace file", "Substituir arquivo"),
+    "btn_save": ("SAVE", "SAVE", "SALVAR"),
+    "btn_save_as": ("Save As", "Save As", "Salvar como"),
+    "btn_debug": ("Debug", "Debug", "Debug"),
+    "btn_path": ("Buka path", "Open path", "Abrir caminho"),
+    "btn_catalog": ("Katalog SBK", "SBK catalog", "Catálogo SBK"),
+    "lbl_filter": ("Filter:", "Filter:", "Filtro:"),
+    "lbl_lang": ("Bahasa:", "Language:", "Idioma:"),
+    "flt_sbk": ("SBK", "SBK", "SBK"),
+    "flt_file": ("File", "Files", "Arquivos"),
+    "flt_all": ("Semua", "All", "Todos"),
+    "col_name": ("Nama", "Name", "Nome"),
+    "col_type": ("Tipe", "Type", "Tipo"),
+    "col_offset": ("Offset", "Offset", "Offset"),
+    "col_size": ("Ukuran", "Size", "Tamanho"),
+    "status_none": ("Buka file WAD dulu.", "Open a WAD file first.", "Abra um arquivo WAD primeiro."),
+    "info": ("Info", "Info", "Info"),
+    "err_title": ("Error", "Error", "Erro"),
+    "pick_file": ("Pilih satu file dulu.", "Select a file first.", "Selecione um arquivo primeiro."),
+    "open_title": ("Pilih WAD", "Select WAD", "Selecionar WAD"),
+    "ft_all": ("Semua file", "All files", "Todos os arquivos"),
+    "dlg_err": ("Error dialog", "Dialog error", "Erro de diálogo"),
+    "not_found": ("File tidak ditemukan:\n%s", "File not found:\n%s", "Arquivo não encontrado:\n%s"),
+    "not_wad": ("Bukan WAD", "Not a WAD", "Não é um WAD"),
+    "too_big": (
+        "File ini %d MB, terlalu besar untuk sebuah WAD (kemungkinan file PAK).\nTool ini hanya membuka file .WAD. Ekstrak dulu WAD-nya dari PAK (misalnya dengan GoW browser), lalu buka WAD itu.",
+        "This file is %d MB, too large for a WAD (probably a PAK file).\nThis tool only opens .WAD files. Extract the WAD from the PAK first (for example with GoW browser), then open that WAD.",
+        "Este arquivo tem %d MB, grande demais para um WAD (provavelmente um arquivo PAK).\nEsta ferramenta só abre arquivos .WAD. Extraia primeiro o WAD do PAK (por exemplo com o GoW browser) e depois abra esse WAD."),
+    "not_gow": (
+        "File ini tidak dikenali sebagai WAD God of War.\nTool hanya membuka file .WAD (bukan PAK, ISO, atau TOC).",
+        "This file is not recognized as a God of War WAD.\nThe tool only opens .WAD files (not PAK, ISO, or TOC).",
+        "Este arquivo não é reconhecido como um WAD de God of War.\nA ferramenta só abre arquivos .WAD (não PAK, ISO ou TOC)."),
+    "opened": (
+        "%s [%s] (%d byte): %d entry, %d SBK berisi audio",
+        "%s [%s] (%d bytes): %d entries, %d SBKs with audio",
+        "%s [%s] (%d bytes): %d entradas, %d SBKs com áudio"),
+    "opened_h": (
+        "%s [%s] (%d byte): %d entry, %d SBK berisi audio (%d SBK tanpa audio disembunyikan)",
+        "%s [%s] (%d bytes): %d entries, %d SBKs with audio (%d SBKs without audio hidden)",
+        "%s [%s] (%d bytes): %d entradas, %d SBKs com áudio (%d SBKs sem áudio ocultos)"),
+    "no_entries_t": ("Entry tidak terdeteksi", "No entries detected", "Nenhuma entrada detectada"),
+    "no_entries": (
+        "File terbuka, tapi layout WAD tidak cocok dengan parser.\nKlik tombol Debug dan kirim hasilnya.",
+        "The file opened, but the WAD layout does not match the parser.\nClick the Debug button and send the result.",
+        "O arquivo abriu, mas o layout do WAD não corresponde ao analisador.\nClique no botão Debug e envie o resultado."),
+    "no_sbk_t": ("Tidak ada SBK", "No SBK", "Nenhum SBK"),
+    "no_sbk": (
+        "WAD ini tidak berisi SBK yang punya audio, jadi tidak ada yang bisa diedit di sini. Pilih filter File/Semua kalau mau melihat isinya.",
+        "This WAD has no SBK with audio, so there is nothing to edit here. Choose the Files/All filter to see its contents.",
+        "Este WAD não tem SBK com áudio, então não há nada para editar aqui. Escolha o filtro Arquivos/Todos para ver o conteúdo."),
+    "open_fail": ("Gagal buka WAD", "Failed to open WAD", "Falha ao abrir o WAD"),
+    "dbg_title": ("Debug: 256 byte pertama", "Debug: first 256 bytes", "Debug: primeiros 256 bytes"),
+    "dbg_need": ("Buka WAD dulu.", "Open a WAD first.", "Abra um WAD primeiro."),
+    "dbg_text": (
+        "File: %s\nUkuran: %d byte\nEntry terdeteksi: %d\n\n%s",
+        "File: %s\nSize: %d bytes\nEntries detected: %d\n\n%s",
+        "Arquivo: %s\nTamanho: %d bytes\nEntradas detectadas: %d\n\n%s"),
+    "edit_fail": ("Tidak bisa edit audio", "Cannot edit audio", "Não é possível editar o áudio"),
+    "exported": ("Export %s OK", "Exported %s", "%s exportado"),
+    "ask_replace_file": ("File pengganti untuk %s", "Replacement file for %s", "Arquivo de substituição para %s"),
+    "not_data": ("Entry ini bukan file data.", "This entry is not a data file.", "Esta entrada não é um arquivo de dados."),
+    "bigger_t": ("Lebih besar", "Larger", "Maior"),
+    "bigger": (
+        "File baru (%d byte) lebih besar dari asli (%d byte).\nWAD akan membesar dan semua file setelahnya bergeser. ISO harus di-rebuild dan game bisa crash.\nLanjut?",
+        "The new file (%d bytes) is larger than the original (%d bytes).\nThe WAD will grow and every file after it will shift. The ISO must be rebuilt and the game may crash.\nContinue?",
+        "O novo arquivo (%d bytes) é maior que o original (%d bytes).\nO WAD vai aumentar e todos os arquivos depois dele vão se deslocar. A ISO precisa ser reconstruída e o jogo pode travar.\nContinuar?"),
+    "file_replaced": ("%s diganti (%d byte). Klik SAVE.", "%s replaced (%d bytes). Click SAVE.", "%s substituído (%d bytes). Clique em SALVAR."),
+    "saved_t": ("Tersimpan", "Saved", "Salvo"),
+    "saved_status": ("Tersimpan: %s", "Saved: %s", "Salvo: %s"),
+    "saved_text": (
+        "Hasil edit ditulis ke:\n%s\n\n%s",
+        "The edited result was written to:\n%s\n\n%s",
+        "O resultado editado foi gravado em:\n%s\n\n%s"),
+    "bak_new": (
+        "Salinan WAD asli (sebelum diedit) disimpan di:\n%s",
+        "A copy of the original WAD (before editing) was saved at:\n%s",
+        "Uma cópia do WAD original (antes da edição) foi salva em:\n%s"),
+    "bak_old": (
+        "Backup lama tetap dipakai (tidak ditimpa):\n%s",
+        "The existing backup was kept (not overwritten):\n%s",
+        "O backup existente foi mantido (não sobrescrito):\n%s"),
+    "save_fail": ("Gagal simpan", "Save failed", "Falha ao salvar"),
+    "saveas_title": ("Simpan WAD sebagai", "Save WAD as", "Salvar WAD como"),
+    "saved_as": (
+        "Hasil edit ditulis ke:\n%s\n\nWAD asli tidak diubah.",
+        "The edited result was written to:\n%s\n\nThe original WAD was not changed.",
+        "O resultado editado foi gravado em:\n%s\n\nO WAD original não foi alterado."),
+    "logged": ("\n\nTercatat di: %s", "\n\nLogged at: %s", "\n\nRegistrado em: %s"),
+    "start_fail": ("Gagal start", "Failed to start", "Falha ao iniciar"),
+    # ---- dialog edit audio ----
+    "d_title": ("Edit audio: %s", "Edit audio: %s", "Editar áudio: %s"),
+    "d_kind_vag": ("bank VAG (rate asli dari header)", "VAG bank (original rate from the header)", "banco VAG (taxa original do cabeçalho)"),
+    "d_kind_blk": ("bank audio internal", "internal audio bank", "banco de áudio interno"),
+    "d_head": ("%s - %d sampel. Suara: %s", "%s - %d samples. Sounds: %s", "%s - %d amostras. Sons: %s"),
+    "d_rate_lbl": ("Sample rate (Hz):", "Sample rate (Hz):", "Taxa de amostragem (Hz):"),
+    "d_rate_hint": (
+        "(rate asli tidak ada di header; atur sampai terdengar normal)",
+        "(the original rate is not in the header; adjust until it sounds normal)",
+        "(a taxa original não está no cabeçalho; ajuste até soar normal)"),
+    "d_mode_lbl": ("Jika audio lebih panjang dari slot:", "If the audio is longer than the slot:", "Se o áudio for maior que o slot:"),
+    "d_mode_grow": ("Perbesar WAD (tidak dipotong)", "Enlarge WAD (not cut)", "Ampliar WAD (sem cortar)"),
+    "d_mode_rate": ("Turunkan rate (ukuran tetap)", "Lower rate (same size)", "Reduzir taxa (mesmo tamanho)"),
+    "d_mode_cut": ("Potong sesuai slot", "Cut to the slot", "Cortar para caber no slot"),
+    "c_no": ("No", "No.", "Nº"),
+    "c_name": ("Nama", "Name", "Nome"),
+    "c_offset": ("Offset WAD", "WAD offset", "Offset no WAD"),
+    "c_bytes": ("Byte", "Bytes", "Bytes"),
+    "c_rate": ("Rate", "Rate", "Taxa"),
+    "c_dur": ("Durasi", "Duration", "Duração"),
+    "c_loop": ("Loop", "Loop", "Loop"),
+    "yes": ("ya", "yes", "sim"),
+    "btn_play": ("Putar", "Play", "Reproduzir"),
+    "btn_stop": ("Stop", "Stop", "Parar"),
+    "btn_hear": ("Dengar WAV", "Hear WAV", "Ouvir WAV"),
+    "btn_exp_wav": ("Export WAV", "Export WAV", "Exportar WAV"),
+    "btn_repl_wav": ("Replace dari WAV", "Replace from WAV", "Substituir por WAV"),
+    "btn_close": ("Tutup", "Close", "Fechar"),
+    "d_help": (
+        "Putar = dengar sampel asli. Dengar WAV = dengar file WAV-mu sebelum dimasukkan. Setelah Replace, klik SAVE di jendela utama.",
+        "Play = hear the original sample. Hear WAV = hear your WAV before inserting it. After Replace, click SAVE in the main window.",
+        "Reproduzir = ouvir a amostra original. Ouvir WAV = ouvir seu WAV antes de inseri-lo. Depois de Substituir, clique em SALVAR na janela principal."),
+    "pick_sample": ("Pilih satu sampel dulu.", "Select a sample first.", "Selecione uma amostra primeiro."),
+    "ask_wav_hear": ("WAV untuk didengar", "WAV to listen to", "WAV para ouvir"),
+    "ask_wav_repl": ("WAV pengganti", "Replacement WAV", "WAV de substituição"),
+    "exp_ok": ("Export OK: %s (%d Hz)", "Exported: %s (%d Hz)", "Exportado: %s (%d Hz)"),
+    "no_player": (
+        "Tidak ada pemutar audio yang bisa dipakai. Pakai Export WAV lalu putar di player lain.",
+        "No audio player available. Use Export WAV and play it in another player.",
+        "Nenhum reprodutor de áudio disponível. Use Exportar WAV e reproduza em outro player."),
+    "play_title": ("Putar", "Play", "Reproduzir"),
+    "play_fail": ("Gagal memutar", "Playback failed", "Falha ao reproduzir"),
+    "fail": ("Gagal", "Failed", "Falha"),
+    "repl_fail": ("Gagal replace", "Replace failed", "Falha ao substituir"),
+    "hear_info": (
+        "WAV-mu: %.2f dtk pada %d Hz (slot: %.2f dtk).",
+        "Your WAV: %.2f s at %d Hz (slot: %.2f s).",
+        "Seu WAV: %.2f s a %d Hz (slot: %.2f s)."),
+    "repl_done": (
+        "Sampel %d diganti: %s. Klik SAVE di jendela utama.",
+        "Sample %d replaced: %s. Click SAVE in the main window.",
+        "Amostra %d substituída: %s. Clique em SALVAR na janela principal."),
+    "st_replaced": ("%s: audio diganti. Klik SAVE.", "%s: audio replaced. Click SAVE.", "%s: áudio substituído. Clique em SALVAR."),
+    "n_same": ("%.2f dtk, %d Hz -> %d Hz", "%.2f s, %d Hz -> %d Hz", "%.2f s, %d Hz -> %d Hz"),
+    "n_grown": ("diperbesar %d byte (%.2f dtk)", "enlarged by %d bytes (%.2f s)", "ampliado em %d bytes (%.2f s)"),
+    "n_rate": (
+        "rate diturunkan %d -> %d Hz agar muat (kualitas lebih rendah)",
+        "rate lowered %d -> %d Hz to fit (lower quality)",
+        "taxa reduzida %d -> %d Hz para caber (qualidade menor)"),
+    "n_cut": ("dipotong ke %.2f dtk", "cut to %.2f s", "cortado para %.2f s"),
+    "c_grow_t": ("WAD akan membesar", "The WAD will grow", "O WAD vai aumentar"),
+    "c_grow": (
+        "Audio %.2f dtk > slot %.2f dtk.\nWAD membesar sekitar %d byte dan isi setelahnya bergeser; ISO harus di-rebuild. Lanjut?",
+        "Audio %.2f s > slot %.2f s.\nThe WAD grows by about %d bytes and everything after it shifts; the ISO must be rebuilt. Continue?",
+        "Áudio %.2f s > slot %.2f s.\nO WAD aumenta cerca de %d bytes e tudo depois dele se desloca; a ISO precisa ser reconstruída. Continuar?"),
+    # ---- katalog ----
+    "k_title": ("Katalog SBK GoW 1 dan GoW 2", "SBK catalog - GoW 1 and GoW 2", "Catálogo SBK - GoW 1 e GoW 2"),
+    "k_intro": (
+        "%d SBK: %d WAD GoW 1 dan %d WAD GoW 2. WAD tanpa SBK dan SBK tanpa audio tidak dimasukkan. Cari berdasarkan nama WAD, nama SBK, atau nama suara.",
+        "%d SBKs: %d GoW 1 WADs and %d GoW 2 WADs. WADs without SBK and SBKs without audio are not included. Search by WAD name, SBK name, or sound name.",
+        "%d SBKs: %d WADs do GoW 1 e %d WADs do GoW 2. WADs sem SBK e SBKs sem áudio não estão incluídos. Pesquise pelo nome do WAD, do SBK ou do som."),
+    "k_search": ("Cari:", "Search:", "Pesquisar:"),
+    "k_game": ("Game", "Game", "Jogo"),
+    "k_wad": ("WAD", "WAD", "WAD"),
+    "k_sbk": ("SBK", "SBK", "SBK"),
+    "k_samples": ("Sampel", "Samples", "Amostras"),
+    "k_pick": ("Pilih satu SBK.", "Select an SBK.", "Selecione um SBK."),
+    "k_detail": (
+        "%s / %s / %s - %d byte. Suara (%d): %s",
+        "%s / %s / %s - %d bytes. Sounds (%d): %s",
+        "%s / %s / %s - %d bytes. Sons (%d): %s"),
+    "k_open": ("Buka WAD ini", "Open this WAD", "Abrir este WAD"),
+    "k_pick_first": ("Pilih satu SBK dulu.", "Select an SBK first.", "Selecione um SBK primeiro."),
+    "k_nf_t": ("WAD tidak ditemukan", "WAD not found", "WAD não encontrado"),
+    "k_nf": (
+        "Letakkan %s di folder yang sama dengan WAD yang tadi kamu buka, atau buka lewat Buka WAD.",
+        "Put %s in the same folder as the WAD you opened earlier, or open it with Open WAD.",
+        "Coloque %s na mesma pasta do WAD aberto anteriormente, ou abra com Abrir WAD."),
+    # ---- pilih bahasa ----
+    "lang_pick": (
+        "Pilih bahasa\nChoose your language\nEscolha o idioma",
+        "Pilih bahasa\nChoose your language\nEscolha o idioma",
+        "Pilih bahasa\nChoose your language\nEscolha o idioma"),
+    # ---- pesan error dari fungsi inti ----
+    "e_count": (
+        "Jumlah suara di header tidak masuk akal (%d).",
+        "The number of sounds in the header is not plausible (%d).",
+        "O número de sons no cabeçalho não é plausível (%d)."),
+    "e_hdr_cut": ("Header SBK terpotong.", "SBK header is truncated.", "O cabeçalho do SBK está truncado."),
+    "e_no_audio": (
+        "SBK ini tidak punya data audio sendiri (hanya daftar/referensi). Audionya ada di SBK pasangan (tipe VAG) atau di luar WAD.",
+        "This SBK has no audio data of its own (only a list/references). The audio is in a paired SBK (VAG type) or outside the WAD.",
+        "Este SBK não tem dados de áudio próprios (apenas lista/referências). O áudio está em um SBK pareado (tipo VAG) ou fora do WAD."),
+    "e_empty": ("SBK ini kosong (tidak ada data audio).", "This SBK is empty (no audio data).", "Este SBK está vazio (sem dados de áudio)."),
+    "e_vag_count": (
+        "Jumlah file VAG tidak masuk akal (%d).",
+        "The number of VAG files is not plausible (%d).",
+        "O número de arquivos VAG não é plausível (%d)."),
+    "e_vag_missing": (
+        "File VAG '%s' tidak ditemukan di offset %#x.",
+        "VAG file '%s' not found at offset %#x.",
+        "Arquivo VAG '%s' não encontrado no offset %#x."),
+    "e_vag_size": ("Ukuran VAG '%s' tidak masuk akal.", "VAG '%s' size is not plausible.", "O tamanho do VAG '%s' não é plausível."),
+    "e_ambig": (
+        "Header SBK ambigu (field dipakai ganda); perbesar dibatalkan.",
+        "Ambiguous SBK header (a field is used twice); enlarging cancelled.",
+        "Cabeçalho do SBK ambíguo (campo usado duas vezes); ampliação cancelada."),
+    "e_ref_missing": (
+        "Referensi sampel tidak ditemukan di header SBK; tidak bisa diperbesar dengan aman.",
+        "Sample reference not found in the SBK header; it cannot be enlarged safely.",
+        "Referência da amostra não encontrada no cabeçalho do SBK; não é possível ampliar com segurança."),
+    "e_stray": (
+        "Header SBK ini punya referensi lain ke sampel setelahnya yang tidak bisa digeser dengan aman. Pakai mode Potong atau Turunkan rate, atau WAV yang lebih pendek.",
+        "This SBK header has other references to later samples that cannot be shifted safely. Use the Cut or Lower rate mode, or a shorter WAV.",
+        "Este cabeçalho do SBK tem outras referências a amostras seguintes que não podem ser deslocadas com segurança. Use o modo Cortar ou Reduzir taxa, ou um WAV mais curto."),
+    "e_wav": (
+        "WAV tidak didukung (pakai PCM 8/16/24/32-bit): %s",
+        "Unsupported WAV (use 8/16/24/32-bit PCM): %s",
+        "WAV não suportado (use PCM de 8/16/24/32 bits): %s"),
+    "e_width": ("Sample width %d tidak didukung.", "Sample width %d is not supported.", "Largura de amostra %d não suportada."),
+    "e_rate_range": ("Sample rate harus 4000-96000.", "Sample rate must be 4000-96000.", "A taxa de amostragem deve ser 4000-96000."),
+    "e_rate_vag_only": (
+        "Mode Turunkan rate hanya untuk bank VAG.",
+        "The Lower rate mode is only for VAG banks.",
+        "O modo Reduzir taxa é só para bancos VAG."),
+    "e_rate_low": (
+        "Audio terlalu panjang: rate yang dibutuhkan (%d Hz) terlalu rendah. Pakai mode Perbesar.",
+        "Audio too long: the required rate (%d Hz) is too low. Use the Enlarge mode.",
+        "Áudio longo demais: a taxa necessária (%d Hz) é baixa demais. Use o modo Ampliar."),
+}
+
+
+def tr(key, *args):
+    """Teks sesuai bahasa aktif; argumen opsional diformat dengan %."""
+    t = I18N[key][_LI.get(LANG, 1)]
+    return t % args if args else t
+
+
+def _settings_dirs():
+    base = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, "frozen", False)
+                                           else __file__))
+    return [base, tempfile.gettempdir()]
+
+
+def load_lang():
+    """Bahasa tersimpan (atau None kalau belum pernah dipilih)."""
+    for d in _settings_dirs():
+        try:
+            with open(os.path.join(d, "sbk_tools_settings.json"), encoding="utf-8") as f:
+                code = json.load(f).get("lang")
+            if code in _LI:
+                return code
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+def save_lang(code):
+    for d in _settings_dirs():
+        try:
+            with open(os.path.join(d, "sbk_tools_settings.json"), "w", encoding="utf-8") as f:
+                json.dump({"lang": code}, f)
+            return True
+        except OSError:
+            continue
+    return False
+
 
 HDR = 0x20
 ALIGN = 0x10
@@ -177,10 +597,10 @@ def _blk_info(buf, off, size):
     """Bank 0x18/0x15: audio ada di 'stream block' di dalam SBK."""
     cnt = struct.unpack_from("<I", buf, off + 4)[0]
     if cnt == 0 or cnt > 512:
-        raise ValueError("Jumlah suara di header tidak masuk akal (%d)." % cnt)
+        raise ValueError(tr("e_count", cnt))
     base = 8 + 28 * cnt
     if base + 0x18 > size:
-        raise ValueError("Header SBK terpotong.")
+        raise ValueError(tr("e_hdr_cut"))
     names = []
     for i in range(cnt):
         raw = bytes(buf[off + 8 + 28 * i: off + 8 + 28 * i + 24])
@@ -188,8 +608,7 @@ def _blk_info(buf, off, size):
     _hs, _hz, ss, sz = struct.unpack_from("<4I", buf, off + base + 8)
     st = base + ss
     if sz == 0 or sz % 16 or st + sz > size:
-        raise ValueError("SBK ini tidak punya data audio sendiri (hanya daftar/referensi). "
-                         "Audionya ada di SBK pasangan (tipe VAG) atau di luar WAD.")
+        raise ValueError(tr("e_no_audio"))
     n = sz // 16
     a0 = off + st
     flags = [buf[a0 + i * 16 + 1] for i in range(n)]
@@ -216,19 +635,19 @@ def _vag_info(buf, off, size):
     """Bank 0x40018: kumpulan file VAGp (sample rate asli ada di header VAG)."""
     cnt = struct.unpack_from("<I", buf, off + 4)[0]
     if cnt == 0 or cnt > 4096 or 8 + 28 * cnt > size:
-        raise ValueError("Jumlah file VAG tidak masuk akal (%d)." % cnt)
+        raise ValueError(tr("e_vag_count", cnt))
     samples, labels, rates, vos = [], [], [], []
     for i in range(cnt):
         e = off + 8 + 28 * i
         name = bytes(buf[e:e + 24]).split(b"\0")[0].decode("latin1")
         vo = struct.unpack_from("<I", buf, e + 24)[0]
         if vo + 0x30 > size or bytes(buf[off + vo:off + vo + 4]) != b"VAGp":
-            raise ValueError("File VAG '%s' tidak ditemukan di offset %#x." % (name, vo))
+            raise ValueError(tr("e_vag_missing", name, vo))
         dlen = struct.unpack_from(">I", buf, off + vo + 12)[0]
         rate = struct.unpack_from(">I", buf, off + vo + 16)[0]
         dlen -= dlen % 16
         if dlen == 0 or vo + 0x30 + dlen > size:
-            raise ValueError("Ukuran VAG '%s' tidak masuk akal." % name)
+            raise ValueError(tr("e_vag_size", name))
         samples.append((vo + 0x30, dlen // 16))
         labels.append(name)
         rates.append(rate)
@@ -240,7 +659,7 @@ def _vag_info(buf, off, size):
 def parse_sbk(buf, off, size):
     """Baca SBK. samples = [(offset byte relatif awal data, jumlah frame)]."""
     if size < 0x20:
-        raise ValueError("SBK ini kosong (tidak ada data audio).")
+        raise ValueError(tr("e_empty"))
     magic = struct.unpack_from("<I", buf, off)[0]
     return _vag_info(buf, off, size) if magic == SBK_VAG else _blk_info(buf, off, size)
 
@@ -305,7 +724,7 @@ def _plan_patches(buf, off, info, idx, delta):
 
     def put(pos, val, fmt="<I"):
         if pos in P and P[pos] != (val, fmt):
-            raise ValueError("Header SBK ambigu (field dipakai ganda); perbesar dibatalkan.")
+            raise ValueError(tr("e_ambig"))
         P[pos] = (val, fmt)
 
     if info["kind"] == "vag":
@@ -326,8 +745,7 @@ def _plan_patches(buf, off, info, idx, delta):
 
     found = pairs(*smp[idx])
     if not found:
-        raise ValueError("Referensi sampel tidak ditemukan di header SBK; "
-                         "tidak bisa diperbesar dengan aman.")
+        raise ValueError(tr("e_ref_missing"))
     for p in found:
         put((p + 1) * 4, smp[idx][1] + delta)
     for j in range(idx + 1, len(smp)):   # sampel setelahnya bergeser
@@ -336,10 +754,7 @@ def _plan_patches(buf, off, info, idx, delta):
         if o:
             stray = [p for p, w in enumerate(words) if w == o and p not in refs]
             if stray:
-                raise ValueError(
-                    "Header SBK ini punya referensi lain ke sampel setelahnya yang tidak bisa "
-                    "digeser dengan aman. Pakai mode Potong atau Turunkan rate, atau WAV yang "
-                    "lebih pendek.")
+                raise ValueError(tr("e_stray"))
         for p in refs:
             put(p * 4, o + delta)
     for p, w in enumerate(words):
@@ -418,7 +833,7 @@ def read_wav(path, target_rate):
             ch, sw, rate = w.getnchannels(), w.getsampwidth(), w.getframerate()
             raw = w.readframes(w.getnframes())
     except wave.Error as ex:
-        raise ValueError("WAV tidak didukung (pakai PCM 8/16/24/32-bit): %s" % ex)
+        raise ValueError(tr("e_wav", ex))
     if sw == 1:
         v = [(x - 128) << 8 for x in raw]
     elif sw == 2:
@@ -429,7 +844,7 @@ def read_wav(path, target_rate):
     elif sw == 4:
         v = [x >> 16 for x in struct.unpack("<%di" % (len(raw) // 4), raw)]
     else:
-        raise ValueError("Sample width %d tidak didukung." % sw)
+        raise ValueError(tr("e_width", sw))
     if ch > 1:
         v = [sum(v[i:i + ch]) // ch for i in range(0, len(v) - ch + 1, ch)]
     if rate != target_rate and v:
@@ -456,8 +871,7 @@ def write_wav(path, pcm, rate):
 
 
 class SbkSession:
-    """Logika edit satu SBK tanpa GUI (dipakai dialog dan ganti-massal satu WAD).
-    mode: 'grow' (perbesar), 'rate' (turunkan rate, VAG), 'cut' (potong)."""
+    """Logika edit satu SBK tanpa GUI. mode: 'grow' (perbesar), 'rate' (turunkan rate, VAG), 'cut'."""
 
     def __init__(self, app, hdr_off, mode="grow", user_rate=22050):
         self.app, self.hdr_off, self.mode, self.user_rate = app, hdr_off, mode, user_rate
@@ -470,11 +884,6 @@ class SbkSession:
     def rate_of(self, i):
         return self.info["rates"][i] or self.user_rate
 
-    def wav_name(self, i):
-        lab = self.info["labels"][i] or "sampel"
-        safe = "".join(c if (c.isalnum() or c in "-_") else "_" for c in lab)
-        return "%02d_%s.wav" % (i + 1, safe)
-
     def pcm_of(self, i):
         return ps_decode(sample_bytes(self.app.buf, self.e.data_off, self.info, i))
 
@@ -482,82 +891,77 @@ class SbkSession:
         """Ganti sampel i dari WAV. confirm(judul, teks)->bool dipanggil sebelum WAD membesar."""
         r = self.rate_of(i)
         if not r or not 4000 <= r <= 96000:
-            raise ValueError("Sample rate harus 4000-96000.")
+            raise ValueError(tr("e_rate_range"))
         buf, off, info = self.app.buf, self.e.data_off, self.info
         pcm, src_rate = read_wav(path, r)
         cap = capacity(buf, off, info, i)
         if len(pcm) <= cap:
             replace_sample(buf, off, info, i, pcm)
-            return "%.2f dtk, %d Hz -> %d Hz" % (len(pcm) / r, src_rate, r)
+            return tr("n_same", len(pcm) / r, src_rate, r)
         if self.mode == "grow":
             extra = (-(-len(pcm) // 28) * 28 - cap) // 28 * 16
-            if confirm and not confirm(
-                    "WAD akan membesar",
-                    "Audio %.2f dtk > slot %.2f dtk.\nWAD membesar sekitar %d byte dan isi "
-                    "setelahnya bergeser; ISO harus di-rebuild. Lanjut?" % (
-                        len(pcm) / r, cap / r, extra)):
-                raise RuntimeError("dibatalkan")
+            if confirm and not confirm(tr("c_grow_t"), tr("c_grow", len(pcm) / r, cap / r, extra)):
+                raise RuntimeError("cancelled")
             grown = grow_sample(buf, self.e, info, i, pcm)
             self.app.entries = scan(buf)
             self.reload()
-            return "diperbesar %d byte (%.2f dtk)" % (grown, len(pcm) / r)
+            return tr("n_grown", grown, len(pcm) / r)
         if self.mode == "rate":
             if info["kind"] != "vag":
-                raise ValueError("Mode Turunkan rate hanya untuk bank VAG.")
+                raise ValueError(tr("e_rate_vag_only"))
             new_rate = int(r * cap / len(pcm))
             if new_rate < 4000:
-                raise ValueError("Audio terlalu panjang: rate yang dibutuhkan (%d Hz) terlalu "
-                                 "rendah. Pakai mode Perbesar." % new_rate)
+                raise ValueError(tr("e_rate_low", new_rate))
             pcm2, _ = read_wav(path, new_rate)
             replace_sample(buf, off, info, i, pcm2)
             set_vag_rate(buf, off, info, i, new_rate)
             self.reload()
-            return "rate diturunkan %d -> %d Hz agar muat (kualitas lebih rendah)" % (r, new_rate)
+            return tr("n_rate", r, new_rate)
         replace_sample(buf, off, info, i, pcm)  # cut
-        return "dipotong ke %.2f dtk" % (cap / r)
+        return tr("n_cut", cap / r)
+
 
 class SbkDialog(tk.Toplevel):
     """Editor audio di dalam satu SBK: putar / export / replace per sampel."""
 
-    MODES_BLK = [("Perbesar WAD (tidak dipotong)", "grow"), ("Potong sesuai slot", "cut")]
-    MODES_VAG = [("Perbesar WAD (tidak dipotong)", "grow"), ("Turunkan rate (ukuran tetap)", "rate"),
-                 ("Potong sesuai slot", "cut")]
+    MODES_BLK = (("grow", "d_mode_grow"), ("cut", "d_mode_cut"))
+    MODES_VAG = (("grow", "d_mode_grow"), ("rate", "d_mode_rate"), ("cut", "d_mode_cut"))
 
     def __init__(self, app, entry):
         sess = SbkSession(app, entry.hdr_off)  # ValueError -> ke pemanggil
         super().__init__(app)
         self.app, self.sess = app, sess
         self.e, self.info = sess.e, sess.info
-        self.title("Edit audio: " + entry.name)
+        self.title(tr("d_title", entry.name))
         self.geometry("700x500")
         info = self.info
-        kind = "bank VAG (rate asli dari header)" if info["kind"] == "vag" else "bank audio internal"
-        ttk.Label(self, wraplength=670, text="%s - %d sampel. %s" % (
-            kind, len(info["samples"]), "Suara: " + ", ".join(info["names"][:12])
-            + (" ..." if len(info["names"]) > 12 else ""))).pack(anchor="w", padx=8, pady=(8, 2))
+        kind = tr("d_kind_vag") if info["kind"] == "vag" else tr("d_kind_blk")
+        names = ", ".join(info["names"][:12]) + (" ..." if len(info["names"]) > 12 else "")
+        ttk.Label(self, wraplength=670, text=tr("d_head", kind, len(info["samples"]), names)).pack(
+            anchor="w", padx=8, pady=(8, 2))
 
         top = ttk.Frame(self)
         top.pack(fill="x", padx=8, pady=4)
         self.rate = tk.StringVar(value="22050")
         if info["kind"] == "blk":
-            ttk.Label(top, text="Sample rate (Hz):").pack(side="left")
+            ttk.Label(top, text=tr("d_rate_lbl")).pack(side="left")
             ttk.Entry(top, textvariable=self.rate, width=8).pack(side="left", padx=4)
-            ttk.Label(top, text="(rate asli tidak ada di header; atur sampai terdengar normal)"
-                      ).pack(side="left")
+            ttk.Label(top, text=tr("d_rate_hint")).pack(side="left")
             self.rate.trace_add("write", lambda *a: self.fill())
 
         mrow = ttk.Frame(self)
         mrow.pack(fill="x", padx=8, pady=2)
-        ttk.Label(mrow, text="Jika audio lebih panjang dari slot:").pack(side="left")
+        ttk.Label(mrow, text=tr("d_mode_lbl")).pack(side="left")
         self.modes = self.MODES_VAG if info["kind"] == "vag" else self.MODES_BLK
-        self.mode = ttk.Combobox(mrow, state="readonly", width=34, values=[m[0] for m in self.modes])
+        self.mode = ttk.Combobox(mrow, state="readonly", width=34, values=[tr(m[1]) for m in self.modes])
         self.mode.current(0)
         self.mode.pack(side="left", padx=6)
 
         cols = ("no", "nama", "offset", "byte", "rate", "durasi", "loop")
         self.tv = ttk.Treeview(self, columns=cols, show="headings", height=10)
-        for c, t, w in zip(cols, ("No", "Nama", "Offset WAD", "Byte", "Rate", "Durasi", "Loop"),
-                           (36, 150, 90, 80, 60, 70, 50)):
+        heads = (tr("c_no"), tr("c_name"), tr("c_offset"), tr("c_bytes"), tr("c_rate"),
+                 tr("c_dur"), tr("c_loop"))
+        for c, t, w in zip(cols, heads, (36, 150, 90, 80, 60, 70, 50)):
             self.tv.heading(c, text=t)
             self.tv.column(c, width=w)
         sb = ttk.Scrollbar(self, orient="vertical", command=self.tv.yview)
@@ -567,16 +971,14 @@ class SbkDialog(tk.Toplevel):
 
         bt = ttk.Frame(self)
         bt.pack(fill="x", padx=8, pady=6)
-        ttk.Button(bt, text="Putar", command=self.play).pack(side="left")
-        ttk.Button(bt, text="Stop", command=stop_audio).pack(side="left", padx=2)
-        ttk.Button(bt, text="Dengar WAV", command=self.preview).pack(side="left", padx=2)
-        ttk.Button(bt, text="Export WAV", command=self.export).pack(side="left", padx=2)
-        ttk.Button(bt, text="Replace dari WAV", command=self.replace).pack(side="left", padx=2)
-        ttk.Button(bt, text="Tutup", command=self.destroy).pack(side="right")
+        ttk.Button(bt, text=tr("btn_play"), command=self.play).pack(side="left")
+        ttk.Button(bt, text=tr("btn_stop"), command=stop_audio).pack(side="left", padx=2)
+        ttk.Button(bt, text=tr("btn_hear"), command=self.preview).pack(side="left", padx=2)
+        ttk.Button(bt, text=tr("btn_exp_wav"), command=self.export).pack(side="left", padx=2)
+        ttk.Button(bt, text=tr("btn_repl_wav"), command=self.replace).pack(side="left", padx=2)
+        ttk.Button(bt, text=tr("btn_close"), command=self.destroy).pack(side="right")
 
-        self.msg = ttk.Label(self, wraplength=670, justify="left",
-                             text="Putar = dengar sampel asli. Dengar WAV = dengar file WAV-mu sebelum "
-                                  "dimasukkan. Setelah Replace, klik SAVE di jendela utama.")
+        self.msg = ttk.Label(self, wraplength=670, justify="left", text=tr("d_help"))
         self.msg.pack(fill="x", padx=8, pady=4)
         self.fill()
 
@@ -587,7 +989,7 @@ class SbkDialog(tk.Toplevel):
             s.user_rate = int(self.rate.get())
         except ValueError:
             s.user_rate = None
-        s.mode = self.modes[self.mode.current()][1]
+        s.mode = self.modes[self.mode.current()][0]
 
     def _after(self):
         self.e, self.info = self.sess.e, self.sess.info
@@ -613,19 +1015,19 @@ class SbkDialog(tk.Toplevel):
             r = self.rate_of(i) or 22050
             self.tv.insert("", "end", iid=str(i), values=(
                 i + 1, self.info["labels"][i], hex(self.e.data_off + s), n * 16, r,
-                "%.2f s" % (n * 28 / r), "ya" if self.info["loops"][i] else "-"))
+                "%.2f s" % (n * 28 / r), tr("yes") if self.info["loops"][i] else "-"))
         if sel and self.tv.exists(sel[0]):
             self.tv.selection_set(sel[0])
 
     def pick(self):
         sel = self.tv.selection()
         if not sel:
-            messagebox.showinfo("Info", "Pilih satu sampel dulu.", parent=self)
+            messagebox.showinfo(tr("info"), tr("pick_sample"), parent=self)
             return None
         i = int(sel[0])
         r = self.rate_of(i)
         if r is None:
-            messagebox.showinfo("Info", "Sample rate harus 4000-96000.", parent=self)
+            messagebox.showinfo(tr("info"), tr("e_rate_range"), parent=self)
             return None
         return i, r
 
@@ -642,15 +1044,14 @@ class SbkDialog(tk.Toplevel):
             initialfile="%s_%d.wav" % (self.info["labels"][i] or self.e.name, i + 1))
         if path:
             write_wav(path, self.pcm_of(i), r)
-            self.msg.config(text="Export OK: %s (%d Hz)" % (os.path.basename(path), r))
+            self.msg.config(text=tr("exp_ok", os.path.basename(path), r))
 
     def _play(self, pcm, r):
         try:
             if not play_pcm(pcm, r):
-                messagebox.showinfo("Putar", "Tidak ada pemutar audio yang bisa dipakai. "
-                                             "Pakai Export WAV lalu putar di player lain.", parent=self)
+                messagebox.showinfo(tr("play_title"), tr("no_player"), parent=self)
         except Exception:
-            messagebox.showerror("Gagal memutar", traceback.format_exc(), parent=self)
+            messagebox.showerror(tr("play_fail"), traceback.format_exc(), parent=self)
 
     def play(self):
         p = self.pick()
@@ -662,16 +1063,16 @@ class SbkDialog(tk.Toplevel):
         if not p:
             return
         path = filedialog.askopenfilename(
-            parent=self, title="WAV untuk didengar", filetypes=[("WAV", "*.wav"), ("Semua", "*.*")])
+            parent=self, title=tr("ask_wav_hear"), filetypes=[("WAV", "*.wav"), (tr("ft_all"), "*.*")])
         if not path:
             return
         try:
             pcm, _ = read_wav(path, p[1])
-            self.msg.config(text="WAV-mu: %.2f dtk pada %d Hz (slot: %.2f dtk)." % (
-                len(pcm) / p[1], p[1], capacity(self.app.buf, self.e.data_off, self.info, p[0]) / p[1]))
+            self.msg.config(text=tr("hear_info", len(pcm) / p[1], p[1],
+                                    capacity(self.app.buf, self.e.data_off, self.info, p[0]) / p[1]))
             self._play(pcm, p[1])
         except Exception as ex:
-            messagebox.showerror("Gagal", str(ex), parent=self)
+            messagebox.showerror(tr("fail"), str(ex), parent=self)
 
     def replace(self):
         p = self.pick()
@@ -679,7 +1080,7 @@ class SbkDialog(tk.Toplevel):
             return
         i, _r = p
         path = filedialog.askopenfilename(
-            parent=self, title="WAV pengganti", filetypes=[("WAV", "*.wav"), ("Semua", "*.*")])
+            parent=self, title=tr("ask_wav_repl"), filetypes=[("WAV", "*.wav"), (tr("ft_all"), "*.*")])
         if not path:
             return
         self._sync()
@@ -688,12 +1089,13 @@ class SbkDialog(tk.Toplevel):
         except RuntimeError:
             return
         except Exception as ex:
-            messagebox.showerror("Gagal replace", str(ex), parent=self)
+            messagebox.showerror(tr("repl_fail"), str(ex), parent=self)
             return
         self.app.dirty = True
         self._after()
-        self.msg.config(text="Sampel %d diganti: %s. Klik SAVE di jendela utama." % (i + 1, note))
-        self.app.status.config(text=self.e.name + ": audio diganti. Klik SAVE.")
+        self.msg.config(text=tr("repl_done", i + 1, note))
+        self.app.set_status("st_replaced", self.e.name)
+
 
 # ======================= KATALOG SBK (GoW 1 dan GoW 2) =======================
 # Hasil pindai WAD GoW 1 (216 WAD) dan GoW 2 (292 WAD): hanya SBK yang berisi audio.
@@ -1112,24 +1514,23 @@ class CatalogDialog(tk.Toplevel):
         self.app = app
         self.rows = load_catalog()
         self.shown = []
-        self.title("Katalog SBK GoW 1 dan GoW 2")
+        self.title(tr("k_title"))
         self.geometry("760x560")
         n1 = len({r[1] for r in self.rows if r[0] == 1})
         n2 = len({r[1] for r in self.rows if r[0] == 2})
-        ttk.Label(self, wraplength=730, text=(
-            "%d SBK: %d WAD GoW 1 dan %d WAD GoW 2. WAD tanpa SBK dan SBK tanpa audio tidak "
-            "dimasukkan. Cari berdasarkan nama WAD, nama SBK, atau nama suara." % (
-                len(self.rows), n1, n2))).pack(anchor="w", padx=8, pady=(8, 2))
+        ttk.Label(self, wraplength=730, text=tr("k_intro", len(self.rows), n1, n2)).pack(
+            anchor="w", padx=8, pady=(8, 2))
         top = ttk.Frame(self)
         top.pack(fill="x", padx=8, pady=4)
-        ttk.Label(top, text="Cari:").pack(side="left")
+        ttk.Label(top, text=tr("k_search")).pack(side="left")
         self.q = tk.StringVar(value="")
         ttk.Entry(top, textvariable=self.q).pack(side="left", fill="x", expand=True, padx=6)
         self.q.trace_add("write", lambda *a: self.fill())
 
         cols = ("game", "wad", "sbk", "tipe", "sampel")
         self.tv = ttk.Treeview(self, columns=cols, show="headings", height=14)
-        for c, t, w in zip(cols, ("Game", "WAD", "SBK", "Tipe", "Sampel"), (60, 150, 190, 70, 70)):
+        heads = (tr("k_game"), tr("k_wad"), tr("k_sbk"), tr("col_type"), tr("k_samples"))
+        for c, t, w in zip(cols, heads, (60, 150, 190, 70, 70)):
             self.tv.heading(c, text=t)
             self.tv.column(c, width=w)
         sb = ttk.Scrollbar(self, orient="vertical", command=self.tv.yview)
@@ -1138,12 +1539,12 @@ class CatalogDialog(tk.Toplevel):
         self.tv.pack(fill="both", expand=True, padx=(8, 0))
         self.tv.bind("<<TreeviewSelect>>", lambda e: self.show())
 
-        self.detail = ttk.Label(self, wraplength=730, justify="left", text="Pilih satu SBK.")
+        self.detail = ttk.Label(self, wraplength=730, justify="left", text=tr("k_pick"))
         self.detail.pack(fill="x", padx=8, pady=4)
         bt = ttk.Frame(self)
         bt.pack(fill="x", padx=8, pady=6)
-        ttk.Button(bt, text="Buka WAD ini", command=self.open_selected).pack(side="left")
-        ttk.Button(bt, text="Tutup", command=self.destroy).pack(side="right")
+        ttk.Button(bt, text=tr("k_open"), command=self.open_selected).pack(side="left")
+        ttk.Button(bt, text=tr("btn_close"), command=self.destroy).pack(side="right")
         self.fill()
 
     def fill(self):
@@ -1164,13 +1565,13 @@ class CatalogDialog(tk.Toplevel):
         names = ", ".join(r[6])
         if len(names) > 1200:
             names = names[:1200] + " ..."
-        self.detail.config(text="%s / %s / %s - %d byte. Suara (%d): %s" % (
-            GAMES[r[0]]["name"], r[1], r[2], r[5], len(r[6]), names or "-"))
+        self.detail.config(text=tr("k_detail", GAMES[r[0]]["name"], r[1], r[2], r[5],
+                                   len(r[6]), names or "-"))
 
     def open_selected(self):
         r = self.current()
         if not r:
-            messagebox.showinfo("Info", "Pilih satu SBK dulu.", parent=self)
+            messagebox.showinfo(tr("info"), tr("k_pick_first"), parent=self)
             return
         dirs = []
         if self.app.path:
@@ -1184,17 +1585,12 @@ class CatalogDialog(tk.Toplevel):
                     self.app.open_path(path)
                     self.app.select_sbk(r[2])
                     return
-        messagebox.showinfo(
-            "WAD tidak ditemukan",
-            "Letakkan %s di folder yang sama dengan WAD yang tadi kamu buka, atau buka lewat "
-            "Open WAD." % r[1], parent=self)
+        messagebox.showinfo(tr("k_nf_t"), tr("k_nf", r[1]), parent=self)
 
 
 def log_error(text):
     """Catat error ke gow_tool_error.txt (di samping exe/script; cadangan: folder temp)."""
-    base = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, "frozen", False)
-                                           else __file__))
-    for d in (base, tempfile.gettempdir()):
+    for d in _settings_dirs():
         try:
             path = os.path.join(d, "gow_tool_error.txt")
             with open(path, "a", encoding="utf-8") as f:
@@ -1205,32 +1601,47 @@ def log_error(text):
     return None
 
 
+FILTERS = ("flt_sbk", "flt_file", "flt_all")
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("GoW WAD SBK Tool")
-        self.geometry("760x500")
+        self.title(APP_NAME)
+        self.geometry("780x520")
         try:  # tema "clam" tampil konsisten di Windows asli maupun Wine
             ttk.Style(self).theme_use("clam")
         except tk.TclError:
             pass
+        self.set_icon()
         self.buf = None
         self.path = None
         self.entries = []
         self.dirty = False
         self.last_dir = None
+        self._st = ("status_none", ())
+        self.build_ui()
 
+    def set_icon(self):
+        try:
+            self._icon = tk.PhotoImage(data=ICON_B64)
+            self.iconphoto(True, self._icon)
+        except Exception:
+            pass
+
+    # ---- tampilan ----
+    def build_ui(self):
         bar = ttk.Frame(self)
         bar.pack(fill="x", padx=8, pady=6)
-        ttk.Button(bar, text="Open WAD", command=self.open_wad).pack(side="left")
-        ttk.Button(bar, text="Edit audio", command=self.edit_audio).pack(side="left", padx=4)
-        ttk.Button(bar, text="Export", command=self.export).pack(side="left")
-        ttk.Button(bar, text="Replace file", command=self.replace).pack(side="left", padx=4)
-        ttk.Button(bar, text="SAVE", command=self.save).pack(side="left")
-        ttk.Button(bar, text="Save As", command=self.save_as).pack(side="left", padx=4)
-        ttk.Button(bar, text="Debug", command=self.debug).pack(side="left", padx=4)
-        ttk.Label(bar, text="Filter:").pack(side="left", padx=(12, 4))
-        self.filter = ttk.Combobox(bar, width=8, state="readonly", values=["SBK", "File", "Semua"])
+        ttk.Button(bar, text=tr("btn_open"), command=self.open_wad).pack(side="left")
+        ttk.Button(bar, text=tr("btn_edit"), command=self.edit_audio).pack(side="left", padx=4)
+        ttk.Button(bar, text=tr("btn_export"), command=self.export).pack(side="left")
+        ttk.Button(bar, text=tr("btn_replace_file"), command=self.replace).pack(side="left", padx=4)
+        ttk.Button(bar, text=tr("btn_save"), command=self.save).pack(side="left")
+        ttk.Button(bar, text=tr("btn_save_as"), command=self.save_as).pack(side="left", padx=4)
+        ttk.Button(bar, text=tr("btn_debug"), command=self.debug).pack(side="left")
+        ttk.Label(bar, text=tr("lbl_filter")).pack(side="left", padx=(12, 4))
+        self.filter = ttk.Combobox(bar, width=9, state="readonly", values=[tr(k) for k in FILTERS])
         self.filter.current(0)
         self.filter.pack(side="left")
         self.filter.bind("<<ComboboxSelected>>", lambda e: self.refresh())
@@ -1240,13 +1651,22 @@ class App(tk.Tk):
         row.pack(fill="x", padx=8)
         self.path_var = tk.StringVar()
         ttk.Entry(row, textvariable=self.path_var).pack(side="left", fill="x", expand=True)
-        ttk.Button(row, text="Buka path", command=lambda: self.open_path(
+        ttk.Button(row, text=tr("btn_path"), command=lambda: self.open_path(
             self.path_var.get().strip().strip('"'))).pack(side="left", padx=4)
-        ttk.Button(row, text="Katalog SBK", command=lambda: CatalogDialog(self)).pack(side="left")
+        ttk.Button(row, text=tr("btn_catalog"), command=lambda: CatalogDialog(self)).pack(side="left")
+
+        row2 = ttk.Frame(self)
+        row2.pack(fill="x", padx=8, pady=(4, 0))
+        ttk.Label(row2, text=tr("lbl_lang")).pack(side="left")
+        self.lang_box = ttk.Combobox(row2, width=20, state="readonly", values=[n for _c, n in LANGS])
+        self.lang_box.current([c for c, _n in LANGS].index(LANG))
+        self.lang_box.pack(side="left", padx=6)
+        self.lang_box.bind("<<ComboboxSelected>>", lambda e: self.change_language())
 
         cols = ("name", "type", "offset", "size")
         self.tree = ttk.Treeview(self, columns=cols, show="headings")
-        for c, t, w in zip(cols, ("Nama", "Tipe", "Offset", "Ukuran"), (280, 90, 110, 100)):
+        heads = (tr("col_name"), tr("col_type"), tr("col_offset"), tr("col_size"))
+        for c, t, w in zip(cols, heads, (280, 90, 110, 100)):
             self.tree.heading(c, text=t)
             self.tree.column(c, width=w)
         sb = ttk.Scrollbar(self, orient="vertical", command=self.tree.yview)
@@ -1254,13 +1674,36 @@ class App(tk.Tk):
         sb.pack(side="right", fill="y", padx=(0, 8))
         self.tree.pack(fill="both", expand=True, padx=(8, 0))
         self.tree.bind("<Double-1>", lambda ev: self.edit_audio())
-        self.status = ttk.Label(self, text="Buka file WAD dulu.")
+        self.status = ttk.Label(self, text="")
         self.status.pack(fill="x", side="bottom", padx=8, pady=6)
+        self.render_status()
+
+    def set_status(self, key, *args):
+        self._st = (key, args)
+        self.render_status()
+
+    def render_status(self):
+        self.status.config(text=tr(self._st[0], *self._st[1]))
+
+    def change_language(self):
+        global LANG
+        code = LANGS[self.lang_box.current()][0]
+        if code == LANG:
+            return
+        LANG = code
+        save_lang(code)
+        keep_path, keep_filter = self.path_var.get(), self.filter.current()
+        for w in list(self.winfo_children()):  # dialog yang terbuka ikut ditutup
+            w.destroy()
+        self.build_ui()
+        self.path_var.set(keep_path)
+        self.filter.current(keep_filter)
+        self.refresh()
 
     def report_callback_exception(self, exc, val, tb):
         text = "".join(traceback.format_exception(exc, val, tb))
         path = log_error(text)
-        messagebox.showerror("Error", text[-1500:] + ("\n\nTercatat di: %s" % path if path else ""))
+        messagebox.showerror(tr("err_title"), text[-1500:] + (tr("logged", path) if path else ""))
 
     # ---- helpers ----
     @staticmethod
@@ -1271,11 +1714,11 @@ class App(tk.Tk):
 
     def refresh(self):
         self.tree.delete(*self.tree.get_children())
-        mode = self.filter.get()
+        mode = FILTERS[self.filter.current()]
         for i, e in enumerate(self.entries):
-            if mode == "SBK" and not (e.is_sbk and has_audio(self.buf, e)):
+            if mode == "flt_sbk" and not (e.is_sbk and has_audio(self.buf, e)):
                 continue
-            if mode == "File" and not e.is_file:
+            if mode == "flt_file" and not e.is_file:
                 continue
             self.tree.insert("", "end", iid=str(i),
                              values=(e.name, self.kind(e), hex(e.data_off), e.size))
@@ -1291,7 +1734,7 @@ class App(tk.Tk):
     def selected(self):
         sel = self.tree.selection()
         if not sel:
-            messagebox.showinfo("Info", "Pilih satu file dulu.")
+            messagebox.showinfo(tr("info"), tr("pick_file"))
             return None
         return self.entries[int(sel[0])]
 
@@ -1299,9 +1742,9 @@ class App(tk.Tk):
     def open_wad(self):
         try:
             p = filedialog.askopenfilename(
-                title="Pilih WAD", filetypes=[("Semua file", "*.*"), ("WAD", "*.wad")])
+                title=tr("open_title"), filetypes=[(tr("ft_all"), "*.*"), ("WAD", "*.wad")])
         except Exception:
-            messagebox.showerror("Dialog error", traceback.format_exc())
+            messagebox.showerror(tr("dlg_err"), traceback.format_exc())
             return
         if p:
             self.open_path(p)
@@ -1309,23 +1752,16 @@ class App(tk.Tk):
     def open_path(self, p):
         try:
             if not p or not os.path.isfile(p):
-                messagebox.showerror("Error", "File tidak ditemukan:\n%s" % p)
+                messagebox.showerror(tr("err_title"), tr("not_found", p))
                 return
             size = os.path.getsize(p)
             if size > MAX_WAD_SIZE:
-                messagebox.showerror(
-                    "Bukan WAD",
-                    "File ini %d MB, terlalu besar untuk sebuah WAD (kemungkinan file PAK).\n"
-                    "Tool ini hanya membuka file .WAD. Ekstrak dulu WAD-nya dari PAK "
-                    "(misalnya dengan GoW browser), lalu buka WAD itu." % (size // (1024 * 1024)))
+                messagebox.showerror(tr("not_wad"), tr("too_big", size // (1024 * 1024)))
                 return
             with open(p, "rb") as f:
                 head = f.read(HDR)
                 if not looks_like_wad(head):
-                    messagebox.showerror(
-                        "Bukan WAD",
-                        "File ini tidak dikenali sebagai WAD God of War.\n"
-                        "Tool hanya membuka file .WAD (bukan PAK, ISO, atau TOC).")
+                    messagebox.showerror(tr("not_wad"), tr("not_gow"))
                     return
                 f.seek(0)
                 self.buf = bytearray(f.read())
@@ -1338,24 +1774,22 @@ class App(tk.Tk):
             total = sum(1 for e in self.entries if e.is_sbk)
             n = sum(1 for e in self.entries if e.is_sbk and has_audio(self.buf, e))
             gname = GAMES[self.entries[0].game]["name"] if self.entries else "?"
-            self.status.config(text="%s [%s] (%d byte): %d entry, %d SBK berisi audio%s" % (
-                os.path.basename(p), gname, len(self.buf), len(self.entries), n,
-                " (%d SBK tanpa audio disembunyikan)" % (total - n) if total > n else ""))
+            if total > n:
+                self.set_status("opened_h", os.path.basename(p), gname, len(self.buf),
+                                len(self.entries), n, total - n)
+            else:
+                self.set_status("opened", os.path.basename(p), gname, len(self.buf),
+                                len(self.entries), n)
             if not self.entries:
-                messagebox.showwarning(
-                    "Entry tidak terdeteksi",
-                    "File terbuka, tapi layout WAD tidak cocok dengan parser.\n"
-                    "Klik tombol Debug dan kirim hasilnya.")
+                messagebox.showwarning(tr("no_entries_t"), tr("no_entries"))
             elif n == 0:
-                messagebox.showinfo("Tidak ada SBK",
-                                    "WAD ini tidak berisi SBK yang punya audio, jadi tidak ada yang bisa "
-                                    "diedit di sini. Pilih filter File/Semua kalau mau melihat isinya.")
+                messagebox.showinfo(tr("no_sbk_t"), tr("no_sbk"))
         except Exception:
-            messagebox.showerror("Gagal buka WAD", traceback.format_exc())
+            messagebox.showerror(tr("open_fail"), traceback.format_exc())
 
     def debug(self):
         if self.buf is None:
-            messagebox.showinfo("Debug", "Buka WAD dulu.")
+            messagebox.showinfo(tr("btn_debug"), tr("dbg_need"))
             return
         b = bytes(self.buf[:0x100])
         lines = []
@@ -1365,11 +1799,10 @@ class App(tk.Tk):
                 i, " ".join("%02X" % x for x in c),
                 "".join(chr(x) if 32 <= x < 127 else "." for x in c)))
         w = tk.Toplevel(self)
-        w.title("Debug: 256 byte pertama")
+        w.title(tr("dbg_title"))
         t = tk.Text(w, width=84, height=20, font=("Courier", 9))
         t.pack(fill="both", expand=True)
-        t.insert("end", "File: %s\nUkuran: %d byte\nEntry terdeteksi: %d\n\n%s" % (
-            self.path, len(self.buf), len(self.entries), "\n".join(lines)))
+        t.insert("end", tr("dbg_text", self.path, len(self.buf), len(self.entries), "\n".join(lines)))
 
     def edit_audio(self):
         e = self.selected()
@@ -1378,9 +1811,9 @@ class App(tk.Tk):
         try:
             SbkDialog(self, e)
         except ValueError as ex:
-            messagebox.showerror("Tidak bisa edit audio", str(ex))
+            messagebox.showerror(tr("edit_fail"), str(ex))
         except Exception:
-            messagebox.showerror("Error", traceback.format_exc())
+            messagebox.showerror(tr("err_title"), traceback.format_exc())
 
     def export(self):
         e = self.selected()
@@ -1390,17 +1823,17 @@ class App(tk.Tk):
         if p:
             with open(p, "wb") as f:
                 f.write(self.buf[e.data_off:e.data_off + e.size])
-            self.status.config(text="Export %s OK" % e.name)
+            self.set_status("exported", e.name)
 
     def replace(self):
         e = self.selected()
         if not e:
             return
         if not e.is_file:
-            messagebox.showinfo("Info", "Entry ini bukan file data.")
+            messagebox.showinfo(tr("info"), tr("not_data"))
             return
-        p = filedialog.askopenfilename(title="File pengganti untuk %s" % e.name,
-                                       filetypes=[("Semua file", "*.*")])
+        p = filedialog.askopenfilename(title=tr("ask_replace_file", e.name),
+                                       filetypes=[(tr("ft_all"), "*.*")])
         if not p:
             return
         with open(p, "rb") as f:
@@ -1411,11 +1844,7 @@ class App(tk.Tk):
             # lebih kecil/sama: isi nol, ukuran asli dipertahankan -> offset lain tidak bergeser
             blob, size_field = new + b"\x00" * (old_slot - len(new)), old
         else:
-            if not messagebox.askyesno(
-                    "Lebih besar",
-                    "File baru (%d byte) lebih besar dari asli (%d byte).\n"
-                    "WAD akan membesar dan semua file setelahnya bergeser. "
-                    "ISO harus di-rebuild dan game bisa crash.\nLanjut?" % (len(new), old)):
+            if not messagebox.askyesno(tr("bigger_t"), tr("bigger", len(new), old)):
                 return
             new_slot = (len(new) + ALIGN - 1) & ~(ALIGN - 1)
             blob, size_field = new + b"\x00" * (new_slot - len(new)), len(new)
@@ -1424,12 +1853,12 @@ class App(tk.Tk):
         self.entries = scan(self.buf)
         self.dirty = True
         self.refresh()
-        self.status.config(text="%s diganti (%d byte). Klik SAVE." % (e.name, len(new)))
+        self.set_status("file_replaced", e.name, len(new))
 
     def save(self):
         """Tulis hasil edit ke file WAD asli; salinan asli disimpan sebagai .bak (sekali)."""
         if self.buf is None:
-            messagebox.showinfo("Info", "Buka WAD dulu.")
+            messagebox.showinfo(tr("info"), tr("dbg_need"))
             return
         try:
             bak = self.path + ".bak"
@@ -1439,37 +1868,57 @@ class App(tk.Tk):
             with open(self.path, "wb") as f:
                 f.write(self.buf)
             self.dirty = False
-            self.status.config(text="Tersimpan: %s" % os.path.basename(self.path))
-            messagebox.showinfo(
-                "Tersimpan",
-                "Hasil edit ditulis ke:\n%s\n\n%s" % (
-                    self.path,
-                    ("Salinan WAD asli (sebelum diedit) disimpan di:\n" + bak) if made else
-                    ("Backup lama tetap dipakai (tidak ditimpa):\n" + bak)))
+            self.set_status("saved_status", os.path.basename(self.path))
+            messagebox.showinfo(tr("saved_t"), tr("saved_text", self.path,
+                                                  tr("bak_new", bak) if made else tr("bak_old", bak)))
         except Exception:
-            messagebox.showerror("Gagal simpan", traceback.format_exc())
+            messagebox.showerror(tr("save_fail"), traceback.format_exc())
 
     def save_as(self):
         """Simpan hasil edit ke nama/lokasi lain; WAD asli tidak disentuh."""
         if self.buf is None:
-            messagebox.showinfo("Info", "Buka WAD dulu.")
+            messagebox.showinfo(tr("info"), tr("dbg_need"))
             return
         try:
             p = filedialog.asksaveasfilename(
-                title="Simpan WAD sebagai", initialfile=os.path.basename(self.path))
+                title=tr("saveas_title"), initialfile=os.path.basename(self.path))
             if not p:
                 return
             with open(p, "wb") as f:
                 f.write(self.buf)
             self.dirty = False
-            self.status.config(text="Tersimpan: %s" % os.path.basename(p))
-            messagebox.showinfo("Tersimpan", "Hasil edit ditulis ke:\n%s\n\nWAD asli tidak diubah." % p)
+            self.set_status("saved_status", os.path.basename(p))
+            messagebox.showinfo(tr("saved_t"), tr("saved_as", p))
         except Exception:
-            messagebox.showerror("Gagal simpan", traceback.format_exc())
+            messagebox.showerror(tr("save_fail"), traceback.format_exc())
+
+
+def choose_language():
+    """Jendela pilih bahasa saat pertama kali dibuka. None kalau ditutup tanpa memilih."""
+    root = tk.Tk()
+    root.title("Language / Bahasa / Idioma")
+    root.geometry("340x250")
+    chosen = {"v": None}
+
+    def pick(code):
+        chosen["v"] = code
+        root.destroy()
+
+    ttk.Label(root, text=I18N["lang_pick"][0], justify="center").pack(pady=14)
+    for code, name in LANGS:
+        ttk.Button(root, text=name, command=lambda c=code: pick(c)).pack(fill="x", padx=50, pady=5)
+    root.mainloop()
+    return chosen["v"]
 
 
 def main():
+    global LANG
     try:
+        code = load_lang()
+        if not code:
+            code = choose_language() or "en"
+            save_lang(code)
+        LANG = code
         app = App()
         if len(sys.argv) > 1:
             app.after(200, lambda: app.open_path(sys.argv[1]))
@@ -1480,8 +1929,7 @@ def main():
         try:
             root = tk.Tk()
             root.withdraw()
-            messagebox.showerror("Gagal start", text[-1500:] + (
-                "\n\nTercatat di: %s" % path if path else ""))
+            messagebox.showerror(tr("start_fail"), text[-1500:] + (tr("logged", path) if path else ""))
         except Exception:
             print(text)
         sys.exit(1)
@@ -1489,3 +1937,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
