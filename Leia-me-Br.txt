@@ -1,0 +1,84 @@
+﻿========================================================================
+ GOW SBK TOOLS BY NICHO  -  v1.0
+ Editor de áudio SBK / SBP para arquivos WAD de God of War 1 e 2 (PS2)
+========================================================================
+
+O QUE É?
+Uma ferramenta de PC (funciona no Windows e no Wine/Winlator) que edita o
+áudio dentro dos arquivos WAD de God of War 1 e God of War 2 (PS2): abra um
+WAD, escolha um SBK, depois reproduza / exporte / substitua um som pelo seu
+próprio WAV e SALVE.
+
+CONTEÚDO DO PACOTE
+  Leia-me-Br.txt         : estas instruções (Português do Brasil)
+  Informacoes-Br.txt     : o que a ferramenta pode e não pode fazer
+  Readme-Indo.txt / Informasi-Indo.txt      : versão em Bahasa Indonesia
+  Readme-Eng.txt / Information-Eng.txt      : versão em English
+  Katalog_SBK.txt        : lista de todos os SBK/SBP com os nomes dos sons
+  SBK Tools\             : a pasta do programa (SBK_Tools.exe + arquivos de apoio)
+
+IMPORTANTE: não mova só o SBK_Tools.exe para outro lugar. Ele precisa das
+DLLs e dos arquivos que ficam ao lado dele. Mantenha a pasta "SBK Tools"
+INTEIRA junta.
+
+COMO USAR (rápido)
+  1. Tenha seus arquivos .WAD. Esta ferramenta NÃO abre arquivos PAK, TOC ou
+     ISO. Extraia o WAD do PAK antes, com outra ferramenta (por exemplo o
+     God of War Browser).
+  2. Execute o SBK_Tools.exe. Na primeira vez você escolhe o idioma
+     (Indonesia / English / Português). Dá para mudar a qualquer momento na
+     caixa "Idioma" da janela principal.
+  3. Clique em "Abrir WAD" e escolha o WAD. Se a janela de arquivos der
+     problema no Wine, cole o local do arquivo na caixa de caminho e clique
+     em "Abrir caminho". Não sabe em qual WAD está um som? Clique em
+     "Catálogo SBK" e pesquise pelo nome do WAD / SBK / som.
+  4. Selecione um SBK na lista e clique em "Editar áudio" (ou dê dois
+     cliques).
+  5. Selecione uma amostra e então:
+       Reproduzir        = ouvir a amostra original
+       Exportar WAV      = salvar a amostra original como arquivo WAV
+       Ouvir WAV         = ouvir seu WAV antes de inseri-lo
+       Substituir por WAV = trocar a amostra pelo seu WAV
+  6. Clique em SALVAR na janela principal. O resultado editado é gravado no
+     WAD original, e uma cópia do WAD intacto é guardada uma vez como
+     NOME.WAD.bak. Quer o resultado em outro arquivo? Use "Salvar como".
+  7. Coloque o WAD editado de volta no PAK / ISO do jogo com outra ferramenta.
+
+TAXA DE AMOSTRAGEM
+  - Bancos VAG: a taxa original é lida do arquivo; não precisa ajustar.
+  - Bancos de áudio internos: a taxa original não fica gravada no arquivo. A
+    ferramenta chuta 22050 Hz. Clique em Reproduzir; se soar lento / rápido
+    demais, mude o número "Taxa de amostragem" até soar certo e use o mesmo
+    número ao Substituir.
+
+SE O SEU WAV FOR MAIOR QUE O SLOT ORIGINAL
+Escolha um modo na caixa "Se o áudio for maior que o slot":
+  - Ampliar WAD   : o áudio não é cortado; o WAD aumenta. A ISO precisa ser
+                    reconstruída e o jogo pode travar se aumentar demais.
+                    Em uma pequena parte das amostras este modo é RECUSADO
+                    com segurança (o cabeçalho do SBK não pode ser deslocado
+                    com segurança) e o WAD fica intacto. Use outro modo
+                    para essas amostras.
+  - Reduzir taxa  : o tamanho do WAD não muda; qualidade menor (só bancos VAG).
+  - Cortar        : o tamanho do WAD não muda; o áudio excedente é descartado.
+Um WAV menor que o slot é sempre seguro (o resto é preenchido com silêncio
+e o tamanho do WAD não muda).
+
+DICAS PARA INICIANTES
+  - Trabalhe sempre em uma CÓPIA. Guarde seu PAK / ISO original.
+  - Mude uma coisa por teste e experimente no jogo. Não acumule várias
+    mudanças de uma vez; se travar, você não saberá a causa.
+  - Comece com um WAV mais curto que o original (o mais seguro).
+
+SE ENCONTRAR UM ERRO / BUG
+A ferramenta registra erros em  gow_tool_error.txt  (ao lado do exe) e mostra
+o local na janela de erro. Envie esse texto de erro (ou uma foto dele) junto
+com os nomes do WAD e do SBK que você abriu ao autor da ferramenta.
+
+WINLATOR / WINE
+Use esta versão em pasta (não o exe de arquivo único). Se a janela ou o
+diálogo de arquivos der problema, use a caixa de caminho + "Abrir caminho".
+
+========================================================================
+ Gow SBK Tools by Nicho
+========================================================================
