@@ -1,68 +1,60 @@
-﻿========================================================================
- INFORMAÇÕES  -  GOW SBK TOOLS BY NICHO  v1.0
+========================================================================
+ INFORMAÇÕES  -  GOW SBK TOOLS BY NICHO  v1.1
 ========================================================================
 
 O QUE FAZ
-  - Edita o áudio dentro de bancos SBK / SBP nos arquivos WAD de God of War 1
-    e God of War 2 (PS2): reproduzir, exportar para WAV, substituir pelo seu
-    próprio WAV.
-  - Detecta GoW 1 / GoW 2 automaticamente e mostra na barra de status.
-  - Catálogo SBK embutido: 385 SBKs (GoW 1: 200 SBKs em 155 WADs; GoW 2: 185 SBKs
-    em 185 WADs). A lista completa está em Katalog_SBK.txt.
-  - Dois tipos de banco são suportados: bancos de áudio internos e bancos VAG
-    (arquivos VAG já empacotados dentro do SBK).
+  - Edita o áudio dentro de bancos SBK / SBP nos arquivos WAD de God of War 1 e God of War 2 (PS2):
+    reproduzir, exportar para WAV, substituir pelo seu próprio WAV.
+  - Abre ISOs de GoW 1 / GoW 2 (PART1.PAK / PART2.PAK -> lista de WADs via GODOFWAR.TOC), um único
+    WAD ou uma pasta de WADs; grava direto na ISO (todas as cópias) com backup e Restaurar ISO.
+  - Catálogo SBK embutido: 385 SBKs (GoW 1: 200 SBKs em 155 WADs; GoW 2: 185 SBKs em 185 WADs).
+    A lista completa está em Katalog_SBK.txt.
+  - Dois tipos de banco: bancos de áudio internos e bancos VAG (arquivos VAG já empacotados no SBK).
   - Três idiomas: Indonesia, English, Português (Brasil).
 
 NÚMEROS
-  Resultados da varredura usada para criar esta ferramenta:
-  - GoW 1: 216 WADs; 200 SBKs têm áudio (155 WADs). 7 SBKs só têm referências
-    ou estão vazios (sem áudio) e ficam ocultos.
-  - GoW 2: 292 WADs; 185 SBKs têm áudio (185 WADs). 16 SBKs só têm referências
-    (sem áudio) e ficam ocultos.
-  - WADs sem SBK não precisam ser abertos nesta ferramenta.
-  A cobertura acima se limita aos WADs que o autor varreu. WADs nunca
-  varridos não podem ser garantidos.
+  - GoW 1: 216 WADs varridos; 200 SBKs têm áudio (155 WADs). 7 SBKs só têm referências / vazios.
+  - GoW 2: 293 WADs varridos; 185 SBKs têm áudio (185 WADs). 16 SBKs só têm referências.
+  - WADs varridos que não têm SBK com áudio ficam ocultos na árvore da ISO.
+  A cobertura se limita aos WADs que o autor varreu. Outros WADs ainda aparecem na ISO, mas não
+  são garantidos.
 
 O QUE NÃO FAZ / FORA DO ESCOPO
-  - Abrir arquivos PAK, TOC ou ISO (somente .WAD; arquivos enormes são
-    recusados).
-  - Arquivos .VPK ou .VAG avulsos no disco.
-  - Streams de música / diálogo guardados fora dos WADs.
-  - Vídeo / cutscenes (PSS, MPEG-2).
-  - Modelos 3D (glTF), texturas e textos de idioma do jogo.
+  - Arquivos .VPK ou .VAG avulsos no disco, streams de música / diálogo fora dos WADs, vídeo /
+    cutscenes (PSS, MPEG-2), modelos 3D, texturas e textos de idioma do jogo.
   - SBKs sem áudio próprio (apenas listas de referências).
+  - Reconstruir ISOs, ou abrir arquivos PART*.PAK soltos fora de uma ISO.
+  - Ampliar um WAD que está dentro de uma ISO (um WAD dentro da ISO precisa manter o tamanho).
 
 NOTAS TÉCNICAS
-  - Substituir por um WAV do mesmo tamanho ou menor não muda o tamanho do WAD
-    e não desloca nenhum outro arquivo.
-  - O modo Ampliar muda o tamanho do WAD e desloca o que vem depois. A
-    ferramenta verifica antes se as referências do cabeçalho do SBK podem ser
-    deslocadas com segurança; se não, a ampliação é recusada e o WAD fica
-    intacto. Em testes aleatórios, cerca de 1 em cada 10 amostras foi recusada.
-  - Depois que o WAD aumenta, a ISO / PAK precisa ser reconstruída com outra
-    ferramenta.
-  - O formato de áudio do PS2 (PS-ADPCM) é recodificado pela ferramenta a
-    partir do seu WAV (mono; WAV estéreo é mixado para mono; a taxa de
-    amostragem é adaptada).
-  - A escolha de idioma fica em sbk_tools_settings.json (ao lado do exe). Os
-    erros são registrados em gow_tool_error.txt.
+  - Substituir por um WAV do mesmo tamanho ou menor não muda o tamanho do WAD e não desloca
+    nenhum outro arquivo.
+  - O modo Ampliar (só WADs soltos) muda o tamanho do WAD e desloca o que vem depois. A ferramenta
+    verifica antes se as referências do cabeçalho do SBK podem ser deslocadas com segurança; se
+    não, a ampliação é recusada. Em testes aleatórios, cerca de 1 em 10 amostras foi recusada.
+  - Posição do WAD na ISO: o GoW 1 usa número do PART + setor (um WAD é listado várias vezes); o
+    GoW 2 usa uma tabela de posições (pode haver mais de uma cópia). Todas as cópias são gravadas.
+  - Backup da ISO: NOME.iso.sbkbak. Escolha de idioma: sbk_tools_settings.json. Erros:
+    gow_tool_error.txt (ao lado do exe).
+  - O formato de áudio do PS2 (PS-ADPCM) é recodificado a partir do seu WAV (mono; estéreo mixado;
+    taxa adaptada).
 
 STATUS DOS TESTES
-  As estruturas de dados foram testadas automaticamente em todos os WADs
-  varridos (substituir e ampliar). O autor também testou resultados no jogo em
-  vários SBKs de GoW 1 e GoW 2. Nem todo SBK foi testado um a um no jogo, e o
-  modo Ampliar pode travar o jogo se aumentar demais. Use com cuidado e
-  sempre em uma cópia.
+  As estruturas de dados foram testadas automaticamente em todos os WADs varridos (substituir e
+  ampliar). O leitor de ISO/TOC foi testado com ISOs simuladas feitas a partir dos GODOFWAR.TOC
+  reais de GoW 1 e GoW 2 e de WADs reais (listas de WADs, leitura, gravação em todas as cópias,
+  backup e restauração conferiram). O autor também testou resultados no jogo em vários SBKs de
+  GoW 1 e GoW 2 (WADs soltos). A gravação direto em uma ISO real do jogo AINDA NÃO foi testada em
+  um aparelho real. Use com cuidado e sempre em uma cópia.
 
 AVISO LEGAL
-  Esta ferramenta não contém arquivos do jogo. Use somente com a sua própria
-  cópia do jogo. É um projeto de fã, sem vínculo com a Sony ou a Santa Monica
-  Studio. God of War é marca registrada de seus respectivos donos. A
-  ferramenta é fornecida como está, sem garantia; use por sua conta e risco.
+  Esta ferramenta não contém arquivos do jogo. Use somente com a sua própria cópia do jogo. Projeto
+  de fã, sem vínculo com a Sony ou a Santa Monica Studio. God of War é marca registrada de seus
+  donos. A ferramenta é fornecida como está, sem garantia.
 
 CRÉDITOS
-  Feito por Nicho. Obrigado ao projeto God of War Browser, que ajudou a
-  entender o formato WAD.
+  Feito por Nicho. Obrigado ao projeto God of War Browser e ao AssetForge, que ajudaram a entender
+  os formatos de arquivo e o fluxo de trabalho.
 
 ========================================================================
  Gow SBK Tools by Nicho
