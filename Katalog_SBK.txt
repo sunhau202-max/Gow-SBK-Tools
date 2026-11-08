@@ -1,4 +1,4 @@
-﻿GOW SBK TOOLS BY NICHO - SBK / SBP CATALOG
+GOW SBK TOOLS BY NICHO - SBK / SBP CATALOG
 Format: WAD | SBK | type | samples | size (bytes) | sound names
 Only SBKs that contain audio. WADs without SBK and SBKs without audio are not listed.
 
