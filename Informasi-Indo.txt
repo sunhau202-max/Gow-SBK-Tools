@@ -1,64 +1,58 @@
-﻿========================================================================
- INFORMASI  -  GOW SBK TOOLS BY NICHO  v1.0
+========================================================================
+ INFORMASI  -  GOW SBK TOOLS BY NICHO  v1.1
 ========================================================================
 
 YANG BISA DILAKUKAN
-  - Mengedit audio di dalam SBK / SBP pada WAD God of War 1 dan God of War 2
-    (PS2): putar, export ke WAV, ganti dengan WAV sendiri.
-  - Mengenali GoW 1 / GoW 2 secara otomatis dan menampilkannya di status.
-  - Katalog SBK bawaan: 385 SBK (GoW 1: 200 SBK di 155 WAD; GoW 2: 185 SBK
-    di 185 WAD). Daftar lengkapnya ada di Katalog_SBK.txt.
-  - Dua jenis bank didukung: bank audio internal dan bank VAG (file VAG yang
-    sudah terkemas di dalam SBK).
+  - Mengedit audio di dalam SBK / SBP pada WAD God of War 1 dan God of War 2 (PS2): putar,
+    export ke WAV, ganti dengan WAV sendiri.
+  - Membuka ISO GoW 1 / GoW 2 (PART1.PAK / PART2.PAK -> daftar WAD lewat GODOFWAR.TOC), satu WAD,
+    atau folder WAD; menyimpan langsung ke ISO (semua salinan) dengan backup dan Kembalikan ISO.
+  - Katalog SBK bawaan: 385 SBK (GoW 1: 200 SBK di 155 WAD; GoW 2: 185 SBK di 185 WAD).
+    Daftar lengkapnya ada di Katalog_SBK.txt.
+  - Dua jenis bank: bank audio internal dan bank VAG (file VAG yang sudah terkemas di dalam SBK).
   - Tiga bahasa: Indonesia, English, Português (Brasil).
 
 JUMLAH
-  Hasil pindai WAD yang dipakai untuk membuat tool ini:
-  - GoW 1: 216 WAD; 200 SBK berisi audio (155 WAD). 7 SBK hanya berisi
-    referensi atau kosong (tanpa audio) dan disembunyikan.
-  - GoW 2: 292 WAD; 185 SBK berisi audio (185 WAD). 16 SBK hanya berisi
-    referensi (tanpa audio) dan disembunyikan.
-  - WAD yang tidak punya SBK tidak perlu dibuka di tool ini.
-  Cakupan di atas hanya WAD yang sudah dipindai pembuat. WAD lain yang belum
-  pernah dipindai belum bisa dijamin.
+  - GoW 1: 216 WAD dipindai; 200 SBK berisi audio (155 WAD). 7 SBK hanya referensi / kosong.
+  - GoW 2: 293 WAD dipindai; 185 SBK berisi audio (185 WAD). 16 SBK hanya referensi.
+  - WAD yang sudah dipindai dan tidak punya SBK berisi audio disembunyikan di pohon ISO.
+  Cakupan hanya WAD yang sudah dipindai pembuat. WAD lain tetap tampil di ISO, tapi belum
+  dijamin.
 
 YANG TIDAK BISA / DI LUAR CAKUPAN
-  - Membuka PAK, TOC, atau ISO (hanya file .WAD; file besar akan ditolak).
-  - File .VPK atau .VAG yang berdiri sendiri di disc.
-  - Stream musik / dialog yang disimpan di luar WAD.
-  - Video / cutscene (PSS, MPEG-2).
-  - Model 3D (glTF), tekstur, dan teks bahasa permainan.
+  - File .VPK atau .VAG yang berdiri sendiri di disc, stream musik / dialog di luar WAD,
+    video / cutscene (PSS, MPEG-2), model 3D, tekstur, dan teks bahasa permainan.
   - SBK yang tidak berisi audio sendiri (hanya daftar referensi).
+  - Membangun ulang ISO, atau membuka file PART*.PAK lepas di luar ISO.
+  - Memperbesar WAD yang berada di dalam ISO (ukuran WAD di ISO harus tetap).
 
 CATATAN TEKNIS
-  - Ganti audio dengan WAV yang sama atau lebih pendek tidak mengubah ukuran
-    WAD dan tidak menggeser file lain.
-  - Mode Perbesar mengubah ukuran WAD dan menggeser isi setelahnya. Tool
-    memeriksa dulu apakah referensi di header SBK aman digeser; kalau tidak,
-    perbesar ditolak dan WAD tidak diubah. Pada pengujian acak sekitar 1 dari
-    10 sampel ditolak.
-  - Setelah WAD membesar, ISO / PAK harus disusun ulang dengan tool lain.
-  - Format audio PS2 (PS-ADPCM) dibuat ulang oleh tool dari WAV (mono; WAV
-    stereo digabung menjadi mono; sample rate disesuaikan).
-  - Pilihan bahasa disimpan di sbk_tools_settings.json (di samping exe).
-    Error dicatat di gow_tool_error.txt.
+  - Mengganti dengan WAV yang sama atau lebih pendek tidak mengubah ukuran WAD dan tidak
+    menggeser file lain.
+  - Mode Perbesar (hanya WAD lepas) mengubah ukuran WAD dan menggeser isi setelahnya. Tool
+    memeriksa dulu apakah referensi di header SBK aman digeser; kalau tidak, perbesar ditolak.
+    Pada pengujian acak sekitar 1 dari 10 sampel ditolak.
+  - Lokasi WAD di ISO: GoW 1 memakai nomor PART + sektor (satu WAD dicatat beberapa kali);
+    GoW 2 memakai tabel lokasi (bisa lebih dari satu salinan). Semua salinan ditulis.
+  - Backup ISO: NAMA.iso.sbkbak. Pilihan bahasa: sbk_tools_settings.json. Error:
+    gow_tool_error.txt (di samping exe).
+  - Format audio PS2 (PS-ADPCM) dibuat ulang dari WAV (mono; stereo digabung; rate disesuaikan).
 
 STATUS PENGUJIAN
-  Struktur data diuji otomatis di semua WAD yang dipindai (ganti audio dan
-  perbesar). Pembuat juga menguji hasilnya di game pada sejumlah SBK GoW 1 dan
-  GoW 2. Tidak setiap SBK diuji satu per satu di game, dan mode Perbesar bisa
-  membuat game crash kalau terlalu besar. Pakai dengan hati-hati dan selalu
-  di salinan.
+  Struktur data diuji otomatis di semua WAD yang dipindai (ganti audio dan perbesar). Pembaca
+  ISO/TOC diuji dengan ISO tiruan dari GODOFWAR.TOC asli GoW 1 dan GoW 2 serta WAD asli (daftar
+  WAD, baca, tulis ke semua salinan, backup, dan kembalikan cocok). Pembuat juga menguji hasil
+  di game pada sejumlah SBK GoW 1 dan GoW 2 (WAD lepas). Penulisan langsung ke ISO game asli
+  BELUM diuji di perangkat asli. Pakai dengan hati-hati dan selalu di salinan.
 
 CATATAN HUKUM
-  Tool ini tidak memuat file game apa pun. Gunakan hanya dengan salinan game
-  milikmu sendiri. Ini proyek penggemar, tidak berafiliasi dengan Sony atau
-  Santa Monica Studio. God of War adalah merek dagang pemiliknya masing-masing.
-  Tool disediakan apa adanya, tanpa jaminan; risiko ditanggung pengguna.
+  Tool ini tidak memuat file game apa pun. Gunakan hanya dengan salinan game milikmu sendiri.
+  Proyek penggemar, tidak berafiliasi dengan Sony atau Santa Monica Studio. God of War adalah
+  merek dagang pemiliknya. Tool disediakan apa adanya, tanpa jaminan.
 
 KREDIT
-  Dibuat oleh Nicho. Terima kasih kepada proyek God of War Browser yang
-  membantu memahami format WAD.
+  Dibuat oleh Nicho. Terima kasih kepada proyek God of War Browser dan AssetForge yang membantu
+  memahami format file dan alur kerja.
 
 ========================================================================
  Gow SBK Tools by Nicho
