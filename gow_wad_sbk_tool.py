@@ -1,7 +1,8 @@
 """
 Gow SBK Tools by Nicho
 God of War 1 & 2 (PS2): edit the audio of SBK/SBP sound banks inside .WAD files.
-Open a WAD -> pick an SBK -> Edit audio (Replace from WAV) -> SAVE.
+Open an ISO (PART1.PAK / PART2.PAK -> WADs), a WAD, or a folder of WADs -> pick an SBK
+-> Edit audio (Replace from WAV) -> SAVE (straight into the ISO, with a backup).
 Languages: Bahasa Indonesia, English, Português (Brasil).
 
 Run:  python gow_wad_sbk_tool.py      (Python 3.8+, no extra libraries)
@@ -22,6 +23,7 @@ import traceback
 import wave
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+
 
 # Ikon jendela (PNG 64 px, base64). Ikon exe dipasang saat build (icon.ico).
 ICON_B64 = (
@@ -162,6 +164,7 @@ ICON_B64 = (
     "Dv+uPjMW9TmCfTY4fuZTB6s8BvcuFpBAQLqxZi1B7z/ofuNpPj5/y//VPv//AOaKRBtijeWYAAAAAElFTkSuQmCC"
 )
 
+
 # ======================= BAHASA / LANGUAGE / IDIOMA =======================
 APP_NAME = "Gow SBK Tools by Nicho"
 LANGS = (("id", "Bahasa Indonesia"), ("en", "English"), ("pt", "Português (Brasil)"))
@@ -189,7 +192,10 @@ I18N = {
     "col_type": ("Tipe", "Type", "Tipo"),
     "col_offset": ("Offset", "Offset", "Offset"),
     "col_size": ("Ukuran", "Size", "Tamanho"),
-    "status_none": ("Buka file WAD dulu.", "Open a WAD file first.", "Abra um arquivo WAD primeiro."),
+    "status_none": (
+        "Buka ISO, WAD, atau folder WAD dulu.",
+        "Open an ISO, a WAD, or a WAD folder first.",
+        "Abra primeiro uma ISO, um WAD ou uma pasta de WADs."),
     "info": ("Info", "Info", "Info"),
     "err_title": ("Error", "Error", "Erro"),
     "pick_file": ("Pilih satu file dulu.", "Select a file first.", "Selecione um arquivo primeiro."),
@@ -199,9 +205,9 @@ I18N = {
     "not_found": ("File tidak ditemukan:\n%s", "File not found:\n%s", "Arquivo não encontrado:\n%s"),
     "not_wad": ("Bukan WAD", "Not a WAD", "Não é um WAD"),
     "too_big": (
-        "File ini %d MB, terlalu besar untuk sebuah WAD (kemungkinan file PAK).\nTool ini hanya membuka file .WAD. Ekstrak dulu WAD-nya dari PAK (misalnya dengan GoW browser), lalu buka WAD itu.",
-        "This file is %d MB, too large for a WAD (probably a PAK file).\nThis tool only opens .WAD files. Extract the WAD from the PAK first (for example with GoW browser), then open that WAD.",
-        "Este arquivo tem %d MB, grande demais para um WAD (provavelmente um arquivo PAK).\nEsta ferramenta só abre arquivos .WAD. Extraia primeiro o WAD do PAK (por exemplo com o GoW browser) e depois abra esse WAD."),
+        "File ini %d MB, terlalu besar untuk sebuah WAD (kemungkinan file PAK).\nUntuk ISO pakai tombol Buka ISO; tool ini hanya membuka file .WAD lepas.",
+        "This file is %d MB, too large for a WAD (probably a PAK file).\nFor an ISO use the Open ISO button; this tool only opens loose .WAD files.",
+        "Este arquivo tem %d MB, grande demais para um WAD (provavelmente um arquivo PAK).\nPara uma ISO use o botão Abrir ISO; esta ferramenta só abre arquivos .WAD soltos."),
     "not_gow": (
         "File ini tidak dikenali sebagai WAD God of War.\nTool hanya membuka file .WAD (bukan PAK, ISO, atau TOC).",
         "This file is not recognized as a God of War WAD.\nThe tool only opens .WAD files (not PAK, ISO, or TOC).",
@@ -351,6 +357,68 @@ I18N = {
         "Letakkan %s di folder yang sama dengan WAD yang tadi kamu buka, atau buka lewat Buka WAD.",
         "Put %s in the same folder as the WAD you opened earlier, or open it with Open WAD.",
         "Coloque %s na mesma pasta do WAD aberto anteriormente, ou abra com Abrir WAD."),
+    # ---- ISO / PAK ----
+    "btn_iso": ("Buka ISO", "Open ISO", "Abrir ISO"),
+    "btn_dir": ("Buka folder WAD", "Open WAD folder", "Abrir pasta de WADs"),
+    "btn_restore": ("Kembalikan ISO", "Restore ISO", "Restaurar ISO"),
+    "tree_head": ("Sumber", "Source", "Fonte"),
+    "iso_bad": (
+        "File ini bukan ISO9660 yang bisa dibaca (tidak ada penanda CD001).",
+        "This file is not a readable ISO9660 image (no CD001 marker).",
+        "Este arquivo não é uma imagem ISO9660 legível (sem o marcador CD001)."),
+    "iso_nopak": ("ISO ini tidak berisi file PAK.", "This ISO contains no PAK files.", "Esta ISO não contém arquivos PAK."),
+    "iso_info": ("%s: %d PAK", "%s: %d PAKs", "%s: %d PAKs"),
+    "dir_none": (
+        "Tidak ada file WAD God of War di folder itu.",
+        "No God of War WAD files in that folder.",
+        "Nenhum arquivo WAD de God of War nessa pasta."),
+    "dir_info": ("%s: %d WAD", "%s: %d WADs", "%s: %d WADs"),
+    "toc_missing": (
+        "GODOFWAR.TOC tidak ditemukan di ISO ini, jadi isi PAK tidak bisa dibaca.",
+        "GODOFWAR.TOC was not found in this ISO, so the PAK contents cannot be read.",
+        "O GODOFWAR.TOC não foi encontrado nesta ISO, então o conteúdo do PAK não pode ser lido."),
+    "toc_bad": (
+        "GODOFWAR.TOC tidak bisa dibaca (format tidak dikenali) atau lokasinya tidak cocok dengan isi PAK.",
+        "GODOFWAR.TOC could not be read (unknown format) or its locations do not match the PAK contents.",
+        "Não foi possível ler o GODOFWAR.TOC (formato desconhecido) ou suas posições não correspondem ao conteúdo do PAK."),
+    "pak_err": ("(daftar WAD tidak bisa dibaca)", "(the WAD list could not be read)", "(não foi possível ler a lista de WADs)"),
+    "pak_empty": ("(tidak ada WAD di PAK ini)", "(no WADs in this PAK)", "(nenhum WAD neste PAK)"),
+    "pak_info": ("%s: %d WAD (%s)", "%s: %d WADs (%s)", "%s: %d WADs (%s)"),
+    "iso_wad_fail": (
+        "Tidak bisa membaca WAD dari ISO: %s",
+        "Could not read the WAD from the ISO: %s",
+        "Não foi possível ler o WAD da ISO: %s"),
+    "iso_check_fail": (
+        "Lokasi WAD di ISO tidak cocok (penanda WAD tidak ditemukan di %s). Tidak ada yang ditulis.",
+        "The WAD location in the ISO does not match (no WAD marker found at %s). Nothing was written.",
+        "A posição do WAD na ISO não confere (marcador de WAD não encontrado em %s). Nada foi gravado."),
+    "iso_size_fail": (
+        "WAD di dalam ISO tidak boleh berubah ukuran, jadi tidak bisa ditulis ke ISO. Pakai WAV yang lebih pendek, atau mode Potong / Turunkan rate.",
+        "A WAD inside an ISO must keep its size, so it cannot be written into the ISO. Use a shorter WAV, or the Cut / Lower rate mode.",
+        "Um WAD dentro de uma ISO precisa manter o tamanho, então não pode ser gravado na ISO. Use um WAV mais curto, ou o modo Cortar / Reduzir taxa."),
+    "e_iso_nogrow": (
+        "WAD di dalam ISO tidak bisa dibesarkan (ukurannya harus tetap). Pakai mode Potong atau Turunkan rate, atau WAV yang lebih pendek. Mode Perbesar hanya untuk file WAD lepas.",
+        "A WAD inside an ISO cannot be enlarged (its size must stay the same). Use the Cut or Lower rate mode, or a shorter WAV. Enlarge is only for loose WAD files.",
+        "Um WAD dentro de uma ISO não pode ser ampliado (o tamanho deve continuar o mesmo). Use o modo Cortar ou Reduzir taxa, ou um WAV mais curto. Ampliar só vale para arquivos WAD soltos."),
+    "iso_saved": (
+        "WAD ditulis ke ISO di %d lokasi:\n%s\n\nBackup isi asli (untuk Kembalikan ISO):\n%s",
+        "WAD written into the ISO at %d location(s):\n%s\n\nBackup of the original content (for Restore ISO):\n%s",
+        "WAD gravado na ISO em %d local(is):\n%s\n\nBackup do conteúdo original (para Restaurar ISO):\n%s"),
+    "restore_ask": (
+        "Kembalikan semua perubahan audio di ISO ini ke kondisi asli (dari backup)?",
+        "Restore every audio change in this ISO to the original state (from the backup)?",
+        "Restaurar todas as alterações de áudio desta ISO ao estado original (a partir do backup)?"),
+    "restore_none": ("Tidak ada file backup untuk ISO ini.", "There is no backup file for this ISO.", "Não há arquivo de backup para esta ISO."),
+    "restore_ok": (
+        "ISO dikembalikan: %d bagian dipulihkan dari backup.",
+        "ISO restored: %d region(s) recovered from the backup.",
+        "ISO restaurada: %d trecho(s) recuperado(s) do backup."),
+    "restore_pick": (
+        "Pilih ISO yang sudah dibuka di pohon kiri dulu.",
+        "Select an opened ISO in the left tree first.",
+        "Selecione primeiro uma ISO aberta na árvore à esquerda."),
+    "save_none": ("Belum ada perubahan untuk disimpan.", "There are no changes to save.", "Não há alterações para salvar."),
+    "wad_gone": ("WAD tidak ditemukan.", "WAD not found.", "WAD não encontrado."),
     # ---- pilih bahasa ----
     "lang_pick": (
         "Pilih bahasa\nChoose your language\nEscolha o idioma",
@@ -870,6 +938,293 @@ def write_wav(path, pcm, rate):
         w.writeframes(struct.pack("<%dh" % len(pcm), *pcm))
 
 
+# ======================= ISO9660 (PS2, sektor 2048 byte) =======================
+class Iso9660:
+    """Pembaca ISO9660 sederhana: daftar file + baca byte. Tidak memuat ISO ke memori."""
+    SECTOR = 2048
+
+    def __init__(self, path):
+        self.path = path
+        self.f = open(path, "rb")
+        self.f.seek(16 * self.SECTOR)
+        pvd = self.f.read(self.SECTOR)
+        if len(pvd) < self.SECTOR or pvd[1:6] != b"CD001" or pvd[0] != 1:
+            self.f.close()
+            raise ValueError("iso")
+        self.root_lba = struct.unpack_from("<I", pvd, 156 + 2)[0]
+        self.root_size = struct.unpack_from("<I", pvd, 156 + 10)[0]
+
+    def close(self):
+        self.f.close()
+
+    def read(self, lba, off, n):
+        self.f.seek(lba * self.SECTOR + off)
+        return self.f.read(n)
+
+    def listdir(self, lba, size):
+        """Yield (nama, is_dir, lba, size) untuk isi satu direktori."""
+        data = self.read(lba, 0, size)
+        pos = 0
+        while pos < len(data):
+            ln = data[pos]
+            if ln == 0:  # sisa sektor kosong -> lompat ke sektor berikutnya
+                pos = (pos // self.SECTOR + 1) * self.SECTOR
+                continue
+            rec = data[pos:pos + ln]
+            pos += ln
+            if len(rec) < 34:
+                continue
+            nlen = rec[32]
+            raw = rec[33:33 + nlen]
+            if raw in (b"\x00", b"\x01"):
+                continue
+            name = raw.decode("latin1").split(";")[0]
+            yield (name, bool(rec[25] & 2), struct.unpack_from("<I", rec, 2)[0],
+                   struct.unpack_from("<I", rec, 10)[0])
+
+    def files(self, depth=8):
+        """Semua file di ISO: list (path, lba, size)."""
+        out = []
+
+        def walk(lba, size, prefix, d):
+            for name, is_dir, l, s in self.listdir(lba, size):
+                if is_dir:
+                    if d > 0:
+                        walk(l, s, prefix + name + "/", d - 1)
+                else:
+                    out.append((prefix + name, l, s))
+        walk(self.root_lba, self.root_size, "", depth)
+        return out
+
+
+# ======================= GODOFWAR.TOC + PAK =======================
+BACKUP_EXT = ".sbkbak"
+BACKUP_MAGIC = b"GOWSBKB1"
+PART_BASE = 10_000_000   # GoW 2: lokasi >= 10.000.000 berarti PART berikutnya (sektor lokal = nilai - 10.000.000)
+
+
+class TocEntry:
+    def __init__(self, name, size, locs):
+        self.name, self.size = name, size
+        self.locs = locs            # [(part 0-based, sektor 2048 byte relatif awal PART)]
+
+
+def _printable(s):
+    return bool(s) and all(32 <= ord(c) < 127 for c in s)
+
+
+def parse_toc(data):
+    """Baca GODOFWAR.TOC GoW 1 atau GoW 2 -> (game, [TocEntry]). ValueError kalau tidak dikenali."""
+    n = len(data)
+    if n >= 40:
+        c = struct.unpack_from("<I", data, 0)[0]
+        if 0 < c < 100000 and 4 + 36 * c <= n and (n - 4 - 36 * c) % 4 == 0 and \
+                _printable(bytes(data[4:28]).split(b"\0")[0].decode("latin1")):
+            # GoW 2: [u32 jumlah] + c x [nama 24, ukuran, jumlah salinan, indeks] + tabel u32 lokasi
+            tail = struct.unpack_from("<%dI" % ((n - 4 - 36 * c) // 4), data, 4 + 36 * c)
+            out = []
+            for i in range(c):
+                o = 4 + 36 * i
+                name = bytes(data[o:o + 24]).split(b"\0")[0].decode("latin1")
+                size, copies, idx = struct.unpack_from("<III", data, o + 24)
+                if not _printable(name) or copies < 1 or idx + copies > len(tail):
+                    continue
+                locs = [(tail[idx + k] // PART_BASE, tail[idx + k] % PART_BASE) for k in range(copies)]
+                out.append(TocEntry(name, size, locs))
+            if out:
+                return 2, out
+    # GoW 1: rekaman 24 byte = nama 12 + part u32 + ukuran u32 + sektor u32
+    out = []
+    for i in range(n // 24):
+        o = i * 24
+        name = bytes(data[o:o + 12]).split(b"\0")[0].decode("latin1")
+        part, size, sec = struct.unpack_from("<III", data, o + 12)
+        if _printable(name) and "." in name and part < 8:
+            out.append(TocEntry(name, size, [(part, sec)]))
+    if len(out) >= 10:
+        return 1, out
+    raise ValueError("toc")
+
+
+class IsoGame:
+    """Satu ISO God of War: ISO9660 + TOC + file PART*.PAK."""
+
+    def __init__(self, path):
+        self.path = path
+        self.iso = Iso9660(path)
+        self.files = self.iso.files()
+        self.paks = {}                # part 0-based -> (nama, lba, ukuran)
+        self.toc_ents, self.game = None, 0
+        found = sorted((n.split("/")[-1], l, s) for n, l, s in self.files if n.upper().endswith(".PAK"))
+        for name, l, s in found:
+            m = [c for c in name.upper().replace(".PAK", "") if c.isdigit()]
+            if name.upper().startswith("PART") and m:
+                self.paks[int("".join(m)) - 1] = (name, l, s)
+        if not self.paks:             # cadangan: urut abjad
+            for i, (name, l, s) in enumerate(found):
+                self.paks[i] = (name, l, s)
+
+    def pak_list(self):
+        return [(i,) + self.paks[i] for i in sorted(self.paks)]
+
+    def load_toc(self):
+        """Parse TOC sekali. Return (game, entries) atau raise ValueError('missing'/'toc')."""
+        if self.toc_ents is not None:
+            return self.game, self.toc_ents
+        toc = [(n, l, s) for n, l, s in self.files if n.split("/")[-1].upper() == "GODOFWAR.TOC"]
+        if not toc:
+            raise ValueError("missing")
+        _n, lba, size = toc[0]
+        self.game, ents = parse_toc(self.iso.read(lba, 0, size))
+        # GoW 1 mencatat WAD yang sama beberapa kali (salinan di PART1/PART2): gabungkan jadi satu
+        merged, order = {}, []
+        for e in ents:
+            key = (e.name.upper(), e.size)
+            if key not in merged:
+                merged[key] = TocEntry(e.name, e.size, [])
+                order.append(key)
+            for loc in e.locs:
+                if loc not in merged[key].locs:
+                    merged[key].locs.append(loc)
+        self.toc_ents = [merged[k] for k in order]
+        return self.game, self.toc_ents
+
+    def abs_lba(self, part, sector):
+        if part not in self.paks:
+            raise ValueError("part")
+        return self.paks[part][1] + sector
+
+    def wads_in_part(self, part):
+        """WAD yang punya salinan di PART ini (header valid). VPK/VAG/PSS/PSW diabaikan."""
+        _g, ents = self.load_toc()
+        out = []
+        for e in ents:
+            if not e.name.upper().endswith(".WAD"):
+                continue
+            for loc in (l for l in e.locs if l[0] == part):
+                try:
+                    head = self.iso.read(self.abs_lba(*loc), 0, HDR)
+                except (ValueError, OSError):
+                    continue
+                if detect_game(head):
+                    out.append(e)
+                    break
+        return sorted(out, key=lambda e: e.name.upper())
+
+    def find_wad(self, name):
+        """Entri WAD (gabungan) bernama `name`, atau None."""
+        _g, ents = self.load_toc()
+        for e in ents:
+            if e.name.upper() == name.upper():
+                return e
+        return None
+
+    def read_wad(self, entry):
+        """Baca WAD dari salinan pertama yang header-nya valid."""
+        for loc in entry.locs:
+            try:
+                data = self.iso.read(self.abs_lba(*loc), 0, entry.size)
+            except (ValueError, OSError):
+                continue
+            if len(data) == entry.size and detect_game(data[:HDR]):
+                return bytearray(data)
+        raise ValueError(entry.name)
+
+    def close(self):
+        self.iso.close()
+
+
+def backup_path(iso_path):
+    return iso_path + BACKUP_EXT
+
+
+def _read_backup(path):
+    """Isi backup: list (offset, bytes)."""
+    out = []
+    try:
+        with open(path, "rb") as f:
+            if f.read(8) != BACKUP_MAGIC:
+                return out
+            while True:
+                h = f.read(12)
+                if len(h) < 12:
+                    break
+                off, ln = struct.unpack("<QI", h)
+                data = f.read(ln)
+                if len(data) < ln:
+                    break
+                out.append((off, data))
+    except OSError:
+        pass
+    return out
+
+
+def write_wad_to_iso(game, entry, buf):
+    """Tulis WAD hasil edit ke SEMUA lokasi di ISO. Backup isi asli ke NAMA.iso.texbak lebih dulu.
+    Mengembalikan daftar offset yang ditulis. ValueError('check:<offset>') kalau penanda WAD tidak cocok."""
+    if len(buf) != entry.size:
+        raise ValueError("size")
+    offs = [game.abs_lba(*loc) * Iso9660.SECTOR for loc in entry.locs]
+    for o in offs:  # periksa semua lokasi sebelum menulis apa pun
+        game.iso.f.seek(o)
+        if not detect_game(game.iso.f.read(HDR)):
+            raise ValueError("check:%d" % o)
+    bak = backup_path(game.path)
+    known = {o for o, _d in _read_backup(bak)}
+    new = [o for o in offs if o not in known]
+    if new:
+        with open(bak, "ab") as f:
+            if f.tell() == 0:
+                f.write(BACKUP_MAGIC)
+            for o in new:
+                game.iso.f.seek(o)
+                f.write(struct.pack("<QI", o, entry.size) + game.iso.f.read(entry.size))
+            f.flush()
+            os.fsync(f.fileno())
+    game.iso.close()
+    try:
+        with open(game.path, "r+b") as f:
+            for o in offs:
+                f.seek(o)
+                f.write(buf)
+            f.flush()
+            os.fsync(f.fileno())
+    finally:
+        game.iso = Iso9660(game.path)
+    return offs
+
+
+def restore_backup(iso_path):
+    """Kembalikan semua bagian dari backup. Return jumlah bagian, atau None kalau tidak ada backup."""
+    bak = backup_path(iso_path)
+    recs = _read_backup(bak)
+    if not recs:
+        return None
+    with open(iso_path, "r+b") as f:
+        for off, data in recs:
+            f.seek(off)
+            f.write(data)
+        f.flush()
+        os.fsync(f.fileno())
+    os.remove(bak)
+    return len(recs)
+
+
+# WAD yang sudah dipindai dan TIDAK punya SBK berisi audio (disembunyikan di pohon ISO).
+# Format per baris: game|NAMA.WAD,NAMA.WAD,...   (WAD yang belum pernah dipindai tetap ditampilkan)
+NOSBK_TXT = """1|ATHN04D.WAD,DEST00.WAD,OLYMP04.WAD,PAND04Z.WAD,R_BRSRK0.WAD,R_BRSRK1.WAD,R_BRSRK2.WAD,R_HERO0.WAD,R_HERO1.WAD,R_HERO2.WAD,R_HERO3.WAD,R_HERO4.WAD,R_HERO5.WAD,R_LGHTN0.WAD,R_LGHTN1.WAD,R_LGHTN2.WAD,R_MEDHD0.WAD,R_MEDHD1.WAD,R_MEDHD2.WAD,R_RDEAD0.WAD,R_RDEAD1.WAD,R_RDEAD2.WAD,R_SAVEPT.WAD,R_THBLT0.WAD,R_THBLT1.WAD,R_THBLT2.WAD,R_WPN0_0.WAD,R_WPN0_1.WAD,R_WPN0_2.WAD,R_WPN0_3.WAD,R_WPN0_4.WAD,R_WPN0_5.WAD,R_WPN1_0.WAD,R_WPN1_1.WAD,R_WPN1_2.WAD,R_WPN1_3.WAD,R_WPN1_4.WAD,R_WPN1_5.WAD,R_WPN2_0.WAD,R_WPN2_1.WAD,R_WPN2_3.WAD,R_WPN2_4.WAD,R_WPN2_5.WAD,R_WPN3_0.WAD,R_WPN3_1.WAD,R_WPN3_2.WAD,R_WPN3_3.WAD,R_WPN3_4.WAD,R_WPN3_5.WAD,R_WPN4_0.WAD,R_WPN4_1.WAD,R_WPN4_2.WAD,R_WPN4_3.WAD,R_WPN4_4.WAD,R_WPN4_5.WAD,R_WPN5_0.WAD,R_WPN5_1.WAD,R_WPN5_2.WAD,R_WPN5_3.WAD,R_WPN5_4.WAD,R_WPN5_5.WAD
+2|ATLAS247.WAD,ATLAS250.WAD,BOG220.WAD,BOG225.WAD,FREE11.WAD,FREE12.WAD,FREE13.WAD,PAL35.WAD,PAL43.WAD,PAL97.WAD,PEGA60.WAD,R_BOATLOW.WAD,R_DEADB00.WAD,R_DEADBFLOAT00.WAD,R_DEADBSP.WAD,R_GRIFIN00.WAD,R_GRIFIN01.WAD,R_GRIFIN02.WAD,R_HERO00.WAD,R_HERO01.WAD,R_HERO02.WAD,R_HERO10.WAD,R_HERO11.WAD,R_HERO12.WAD,R_HERO13.WAD,R_HERO14.WAD,R_HERO15.WAD,R_HERO16.WAD,R_KRAKEN10.WAD,R_LGLSCA.WAD,R_MCICON.WAD,R_MRHAND00.WAD,R_M_EARTH0.WAD,R_M_EARTH1.WAD,R_M_EARTH2.WAD,R_M_ELCTRC0.WAD,R_M_ELCTRC1.WAD,R_M_ELCTRC2.WAD,R_M_LGHTN2.WAD,R_M_MEDUSA0.WAD,R_M_MEDUSA1.WAD,R_M_MEDUSA2.WAD,R_M_WIND0.WAD,R_M_WIND1.WAD,R_M_WIND2.WAD,R_PHOENIX10.WAD,R_PROME00.WAD,R_RAVEN00.WAD,R_S3HAND00.WAD,R_S3HAND01.WAD,R_S3HAND02.WAD,R_S3HAND03.WAD,R_S3HAND04.WAD,R_S3HAND05.WAD,R_S3HAND06.WAD,R_SAVEPT.WAD,R_SISTER3B.WAD,R_SISTER3C.WAD,R_SPIREBELL00.WAD,R_SPSOLD10.WAD,R_S_BONE0.WAD,R_S_BONE1.WAD,R_S_BONE2.WAD,R_S_HAMMER0.WAD,R_S_HAMMER1.WAD,R_S_HAMMER2.WAD,R_S_OLYMPUS0.WAD,R_S_OLYMPUS1.WAD,R_S_OLYMPUS2.WAD,R_TRYNG00.WAD,R_TWIN00.WAD,R_TWIN01.WAD,R_WEAPON0_0.WAD,R_WEAPON0_1.WAD,R_WEAPON0_2.WAD,R_WEAPON0_3.WAD,R_WEAPON0_4.WAD,R_WEAPON0_5.WAD,R_WEAPON10_0.WAD,R_WEAPON10_1.WAD,R_WEAPON10_2.WAD,R_WEAPON10_3.WAD,R_WEAPON10_4.WAD,R_WEAPON10_5.WAD,R_WEAPON13_0.WAD,R_WEAPON13_1.WAD,R_WEAPON13_2.WAD,R_WEAPON13_3.WAD,R_WEAPON13_4.WAD,R_WEAPON13_5.WAD,R_WEAPON15_0.WAD,R_WEAPON15_1.WAD,R_WEAPON15_2.WAD,R_WEAPON15_3.WAD,R_WEAPON15_4.WAD,R_WEAPON15_5.WAD,R_WEAPON16_0.WAD,R_WEAPON16_1.WAD,R_WEAPON16_2.WAD,R_WEAPON16_3.WAD,R_WEAPON16_4.WAD,R_WEAPON16_5.WAD,R_ZEUSBIG.WAD,R_ZEUSSWD.WAD,SPIR22.WAD,SPIR30.WAD,SPIR37.WAD,SPIR38.WAD"""
+_NOSBK = {}
+
+
+def nosbk_set(game):
+    if not _NOSBK:
+        for line in NOSBK_TXT.split("\n"):
+            g, _, names = line.partition("|")
+            _NOSBK[int(g)] = set(n for n in names.split(",") if n)
+    return _NOSBK.get(game, set())
+
+
 class SbkSession:
     """Logika edit satu SBK tanpa GUI. mode: 'grow' (perbesar), 'rate' (turunkan rate, VAG), 'cut'."""
 
@@ -899,6 +1254,8 @@ class SbkSession:
             replace_sample(buf, off, info, i, pcm)
             return tr("n_same", len(pcm) / r, src_rate, r)
         if self.mode == "grow":
+            if getattr(self.app, "doc", None) is not None and self.app.doc.src:
+                raise ValueError(tr("e_iso_nogrow"))
             extra = (-(-len(pcm) // 28) * 28 - cap) // 28 * 16
             if confirm and not confirm(tr("c_grow_t"), tr("c_grow", len(pcm) / r, cap / r, extra)):
                 raise RuntimeError("cancelled")
@@ -953,6 +1310,8 @@ class SbkDialog(tk.Toplevel):
         mrow.pack(fill="x", padx=8, pady=2)
         ttk.Label(mrow, text=tr("d_mode_lbl")).pack(side="left")
         self.modes = self.MODES_VAG if info["kind"] == "vag" else self.MODES_BLK
+        if getattr(app, "doc", None) is not None and app.doc.src:  # WAD di ISO: ukuran harus tetap
+            self.modes = tuple(sorted((m for m in self.modes if m[0] != "grow"), key=lambda m: m[0] != "cut"))
         self.mode = ttk.Combobox(mrow, state="readonly", width=34, values=[tr(m[1]) for m in self.modes])
         self.mode.current(0)
         self.mode.pack(side="left", padx=6)
@@ -1573,9 +1932,17 @@ class CatalogDialog(tk.Toplevel):
         if not r:
             messagebox.showinfo(tr("info"), tr("k_pick_first"), parent=self)
             return
+        for iso_path, game in list(self.app.isos.items()):  # ISO yang sedang terbuka lebih dulu
+            try:
+                e = game.find_wad(r[1])
+            except ValueError:
+                e = None
+            if e and self.app.select_iso_wad(iso_path, e):
+                self.app.select_sbk(r[2])
+                return
         dirs = []
-        if self.app.path:
-            dirs.append(os.path.dirname(self.app.path))
+        if self.app.doc is not None and not self.app.doc.src and self.app.doc.path:
+            dirs.append(os.path.dirname(self.app.doc.path))
         if getattr(self.app, "last_dir", None):
             dirs.append(self.app.last_dir)
         for d in dirs:
@@ -1604,23 +1971,60 @@ def log_error(text):
 FILTERS = ("flt_sbk", "flt_file", "flt_all")
 
 
+class Doc:
+    """Satu WAD yang terbuka: dari file lepas (src None) atau dari dalam ISO (src = ("iso", IsoGame, TocEntry))."""
+
+    def __init__(self, path, buf, src=None):
+        self.path, self.buf, self.src = path, buf, src
+        self.entries = scan(buf)
+        self.dirty = False
+        self.game = self.entries[0].game if self.entries else 0
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(APP_NAME)
-        self.geometry("780x520")
+        self.geometry("980x600")
         try:  # tema "clam" tampil konsisten di Windows asli maupun Wine
             ttk.Style(self).theme_use("clam")
         except tk.TclError:
             pass
         self.set_icon()
-        self.buf = None
-        self.path = None
-        self.entries = []
-        self.dirty = False
+        self.sources = []    # [("iso", path, [(nama, part)]), ("wad", path), ("dir", path, [nama])]
+        self.docs = {}       # kunci -> Doc
+        self.isos = {}       # path ISO -> IsoGame
+        self.meta = {}       # iid -> dict
+        self.doc = None      # WAD yang sedang dipilih
         self.last_dir = None
         self._st = ("status_none", ())
         self.build_ui()
+
+    # ---- WAD terpilih: dipakai SbkDialog / SbkSession lewat atribut ini ----
+    @property
+    def buf(self):
+        return self.doc.buf if self.doc else None
+
+    @property
+    def entries(self):
+        return self.doc.entries if self.doc else []
+
+    @entries.setter
+    def entries(self, v):
+        self.doc.entries = v
+
+    @property
+    def path(self):
+        return self.doc.path if self.doc else None
+
+    @property
+    def dirty(self):
+        return self.doc.dirty if self.doc else False
+
+    @dirty.setter
+    def dirty(self, v):
+        if self.doc:
+            self.doc.dirty = v
 
     def set_icon(self):
         try:
@@ -1632,16 +2036,28 @@ class App(tk.Tk):
     # ---- tampilan ----
     def build_ui(self):
         bar = ttk.Frame(self)
-        bar.pack(fill="x", padx=8, pady=6)
-        ttk.Button(bar, text=tr("btn_open"), command=self.open_wad).pack(side="left")
-        ttk.Button(bar, text=tr("btn_edit"), command=self.edit_audio).pack(side="left", padx=4)
-        ttk.Button(bar, text=tr("btn_export"), command=self.export).pack(side="left")
-        ttk.Button(bar, text=tr("btn_replace_file"), command=self.replace).pack(side="left", padx=4)
-        ttk.Button(bar, text=tr("btn_save"), command=self.save).pack(side="left")
-        ttk.Button(bar, text=tr("btn_save_as"), command=self.save_as).pack(side="left", padx=4)
-        ttk.Button(bar, text=tr("btn_debug"), command=self.debug).pack(side="left")
-        ttk.Label(bar, text=tr("lbl_filter")).pack(side="left", padx=(12, 4))
-        self.filter = ttk.Combobox(bar, width=9, state="readonly", values=[tr(k) for k in FILTERS])
+        bar.pack(fill="x", padx=8, pady=(6, 2))
+        ttk.Button(bar, text=tr("btn_iso"), command=self.open_iso).pack(side="left")
+        ttk.Button(bar, text=tr("btn_open"), command=self.open_wad).pack(side="left", padx=4)
+        ttk.Button(bar, text=tr("btn_dir"), command=self.open_dir).pack(side="left")
+        ttk.Button(bar, text=tr("btn_catalog"), command=lambda: CatalogDialog(self)).pack(side="left", padx=(12, 0))
+        ttk.Label(bar, text=tr("lbl_lang")).pack(side="left", padx=(16, 4))
+        self.lang_box = ttk.Combobox(bar, width=18, state="readonly", values=[n for _c, n in LANGS])
+        self.lang_box.current([c for c, _n in LANGS].index(LANG))
+        self.lang_box.pack(side="left")
+        self.lang_box.bind("<<ComboboxSelected>>", lambda e: self.change_language())
+
+        bar2 = ttk.Frame(self)
+        bar2.pack(fill="x", padx=8, pady=(2, 2))
+        ttk.Button(bar2, text=tr("btn_edit"), command=self.edit_audio).pack(side="left")
+        ttk.Button(bar2, text=tr("btn_export"), command=self.export).pack(side="left", padx=4)
+        ttk.Button(bar2, text=tr("btn_replace_file"), command=self.replace).pack(side="left")
+        ttk.Button(bar2, text=tr("btn_save"), command=self.save).pack(side="left", padx=(12, 4))
+        ttk.Button(bar2, text=tr("btn_save_as"), command=self.save_as).pack(side="left")
+        ttk.Button(bar2, text=tr("btn_restore"), command=self.restore_iso).pack(side="left", padx=4)
+        ttk.Button(bar2, text=tr("btn_debug"), command=self.debug).pack(side="left")
+        ttk.Label(bar2, text=tr("lbl_filter")).pack(side="left", padx=(12, 4))
+        self.filter = ttk.Combobox(bar2, width=9, state="readonly", values=[tr(k) for k in FILTERS])
         self.filter.current(0)
         self.filter.pack(side="left")
         self.filter.bind("<<ComboboxSelected>>", lambda e: self.refresh())
@@ -1653,29 +2069,39 @@ class App(tk.Tk):
         ttk.Entry(row, textvariable=self.path_var).pack(side="left", fill="x", expand=True)
         ttk.Button(row, text=tr("btn_path"), command=lambda: self.open_path(
             self.path_var.get().strip().strip('"'))).pack(side="left", padx=4)
-        ttk.Button(row, text=tr("btn_catalog"), command=lambda: CatalogDialog(self)).pack(side="left")
 
-        row2 = ttk.Frame(self)
-        row2.pack(fill="x", padx=8, pady=(4, 0))
-        ttk.Label(row2, text=tr("lbl_lang")).pack(side="left")
-        self.lang_box = ttk.Combobox(row2, width=20, state="readonly", values=[n for _c, n in LANGS])
-        self.lang_box.current([c for c, _n in LANGS].index(LANG))
-        self.lang_box.pack(side="left", padx=6)
-        self.lang_box.bind("<<ComboboxSelected>>", lambda e: self.change_language())
-
-        cols = ("name", "type", "offset", "size")
-        self.tree = ttk.Treeview(self, columns=cols, show="headings")
-        heads = (tr("col_name"), tr("col_type"), tr("col_offset"), tr("col_size"))
-        for c, t, w in zip(cols, heads, (280, 90, 110, 100)):
-            self.tree.heading(c, text=t)
-            self.tree.column(c, width=w)
-        sb = ttk.Scrollbar(self, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=sb.set)
-        sb.pack(side="right", fill="y", padx=(0, 8))
-        self.tree.pack(fill="both", expand=True, padx=(8, 0))
-        self.tree.bind("<Double-1>", lambda ev: self.edit_audio())
         self.status = ttk.Label(self, text="")
         self.status.pack(fill="x", side="bottom", padx=8, pady=6)
+
+        pw = ttk.PanedWindow(self, orient="horizontal")
+        pw.pack(fill="both", expand=True, padx=8, pady=(4, 0))
+        left = ttk.Frame(pw)
+        self.stree = ttk.Treeview(left, show="tree headings", columns=())
+        self.stree.heading("#0", text=tr("tree_head"))
+        self.stree.column("#0", width=230)
+        sb = ttk.Scrollbar(left, orient="vertical", command=self.stree.yview)
+        self.stree.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+        self.stree.pack(fill="both", expand=True)
+        self.stree.bind("<<TreeviewSelect>>", lambda e: self.on_tree_select())
+        self.stree.bind("<<TreeviewOpen>>", lambda e: self.on_tree_open())
+        pw.add(left, weight=1)
+
+        right = ttk.Frame(pw)
+        cols = ("name", "type", "offset", "size")
+        self.tree = ttk.Treeview(right, columns=cols, show="headings")
+        heads = (tr("col_name"), tr("col_type"), tr("col_offset"), tr("col_size"))
+        for c, t, w in zip(cols, heads, (260, 80, 100, 90)):
+            self.tree.heading(c, text=t)
+            self.tree.column(c, width=w)
+        sb2 = ttk.Scrollbar(right, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=sb2.set)
+        sb2.pack(side="right", fill="y")
+        self.tree.pack(fill="both", expand=True)
+        self.tree.bind("<Double-1>", lambda ev: self.edit_audio())
+        pw.add(right, weight=3)
+        self.render_tree()
+        self.refresh()
         self.render_status()
 
     def set_status(self, key, *args):
@@ -1705,7 +2131,227 @@ class App(tk.Tk):
         path = log_error(text)
         messagebox.showerror(tr("err_title"), text[-1500:] + (tr("logged", path) if path else ""))
 
-    # ---- helpers ----
+    # ---- pohon sumber ----
+    def render_tree(self):
+        self.stree.delete(*self.stree.get_children())
+        self.meta = {}
+
+        def add(parent, text, **m):
+            iid = self.stree.insert(parent, "end", text=text)
+            self.meta[iid] = m
+            return iid
+        for src in self.sources:
+            if src[0] == "wad":
+                add("", os.path.basename(src[1]), kind="wad", path=src[1])
+            elif src[0] == "dir":
+                top = add("", os.path.basename(src[1].rstrip("/\\")) or src[1], kind="dir")
+                for n in src[2]:
+                    add(top, n, kind="wad", path=os.path.join(src[1], n))
+                self.stree.item(top, open=True)
+            elif src[0] == "iso":
+                top = add("", os.path.basename(src[1]), kind="iso", path=src[1])
+                for name, part in src[2]:
+                    pk = add(top, name, kind="pak", path=src[1], part=part, name=name, shown=False)
+                    add(pk, "...", kind="note")  # supaya tanda > muncul
+                self.stree.item(top, open=True)
+
+    def on_tree_open(self):
+        iid = self.stree.focus()
+        m = self.meta.get(iid, {})
+        if m.get("kind") != "pak" or m.get("shown"):
+            return
+        game = self.isos.get(m["path"])
+        for c in list(self.stree.get_children(iid)):
+            self.stree.delete(c)
+            self.meta.pop(c, None)
+        m["shown"] = True
+        try:
+            hidden = None
+            wads = game.wads_in_part(m["part"])
+            hidden = nosbk_set(game.load_toc()[0])
+            wads = [e for e in wads if e.name.upper() not in hidden]  # WAD tanpa SBK disembunyikan
+        except ValueError as ex:
+            key = "toc_missing" if str(ex) == "missing" else "toc_bad"
+            c = self.stree.insert(iid, "end", text=tr("pak_err"))
+            self.meta[c] = {"kind": "note"}
+            m["shown"] = False
+            messagebox.showerror(tr("open_fail"), tr(key))
+            return
+        except Exception:
+            m["shown"] = False
+            messagebox.showerror(tr("open_fail"), traceback.format_exc())
+            return
+        for e in wads:
+            c = self.stree.insert(iid, "end", text=e.name)
+            self.meta[c] = {"kind": "isowad", "iso": m["path"], "entry": e}
+        if not wads:
+            c = self.stree.insert(iid, "end", text=tr("pak_empty"))
+            self.meta[c] = {"kind": "note"}
+        self.set_status("pak_info", m["name"], len(wads), GAMES[game.game]["name"])
+
+    def on_tree_select(self):
+        sel = self.stree.selection()
+        m = self.meta.get(sel[0], {}) if sel else {}
+        doc = None
+        if m.get("kind") == "wad":
+            doc = self.load_doc(m["path"])
+        elif m.get("kind") == "isowad":
+            doc = self.load_iso_doc(m["iso"], m["entry"])
+        if doc:
+            self.show_doc(doc)
+
+    def show_doc(self, doc, popups=False):
+        self.doc = doc
+        self.refresh()
+        total = sum(1 for e in doc.entries if e.is_sbk)
+        n = sum(1 for e in doc.entries if e.is_sbk and has_audio(doc.buf, e))
+        gname = GAMES[doc.game]["name"] if doc.game else "?"
+        if total > n:
+            self.set_status("opened_h", os.path.basename(doc.path), gname, len(doc.buf), len(doc.entries), n, total - n)
+        else:
+            self.set_status("opened", os.path.basename(doc.path), gname, len(doc.buf), len(doc.entries), n)
+        if popups:
+            if not doc.entries:
+                messagebox.showwarning(tr("no_entries_t"), tr("no_entries"))
+            elif n == 0:
+                messagebox.showinfo(tr("no_sbk_t"), tr("no_sbk"))
+
+    def select_iso_wad(self, iso_path, entry):
+        """Buka PAK yang berisi WAD ini di pohon dan pilih WAD-nya (dipakai Katalog)."""
+        parts = {l[0] for l in entry.locs}
+        for iid, m in self.meta.items():
+            if m.get("kind") == "pak" and m.get("path") == iso_path and m.get("part") in parts:
+                self.stree.item(iid, open=True)
+                self.stree.focus(iid)
+                self.on_tree_open()
+                for c in self.stree.get_children(iid):
+                    cm = self.meta.get(c, {})
+                    if cm.get("kind") == "isowad" and cm["entry"].name.upper() == entry.name.upper():
+                        self.stree.selection_set(c)
+                        self.on_tree_select()
+                        return True
+        return False
+
+    # ---- membuka sumber ----
+    def load_doc(self, path):
+        if path in self.docs:
+            return self.docs[path]
+        try:
+            if not path or not os.path.isfile(path):
+                messagebox.showerror(tr("err_title"), tr("not_found", path))
+                return None
+            size = os.path.getsize(path)
+            if size > MAX_WAD_SIZE:
+                messagebox.showerror(tr("not_wad"), tr("too_big", size // (1024 * 1024)))
+                return None
+            with open(path, "rb") as f:
+                head = f.read(HDR)
+                if not looks_like_wad(head):
+                    messagebox.showerror(tr("not_wad"), tr("not_gow"))
+                    return None
+                f.seek(0)
+                buf = bytearray(f.read())
+            self.last_dir = os.path.dirname(path)
+            doc = self.docs[path] = Doc(path, buf)
+            return doc
+        except Exception:
+            messagebox.showerror(tr("open_fail"), traceback.format_exc())
+            return None
+
+    def load_iso_doc(self, iso_path, entry):
+        key = "iso:%s|%s|%d" % (iso_path, entry.name.upper(), entry.size)
+        if key in self.docs:
+            return self.docs[key]
+        try:
+            game = self.isos[iso_path]
+            buf = game.read_wad(entry)
+            doc = self.docs[key] = Doc(entry.name, buf, ("iso", game, entry))
+            return doc
+        except Exception as ex:
+            messagebox.showerror(tr("open_fail"), tr("iso_wad_fail", str(ex)))
+            return None
+
+    def open_wad(self):
+        try:
+            p = filedialog.askopenfilename(
+                title=tr("open_title"), filetypes=[(tr("ft_all"), "*.*"), ("WAD", "*.wad")])
+        except Exception:
+            messagebox.showerror(tr("dlg_err"), traceback.format_exc())
+            return
+        if p:
+            self.open_wad_path(p)
+
+    def open_wad_path(self, p):
+        doc = self.load_doc(p)
+        if not doc:
+            return
+        self.path_var.set(p)
+        if ("wad", p) not in self.sources:
+            self.sources.append(("wad", p))
+        self.render_tree()
+        for iid, m in self.meta.items():
+            if m.get("kind") == "wad" and m.get("path") == p:
+                self.stree.selection_set(iid)
+                break
+        self.show_doc(doc, popups=True)
+
+    def open_dir(self):
+        d = filedialog.askdirectory(title=tr("btn_dir"))
+        if not d:
+            return
+        names = []
+        for n in sorted(os.listdir(d), key=str.lower):
+            if not n.lower().endswith(".wad"):
+                continue  # VPK, VAG, PSS, PSW dan lainnya disembunyikan
+            try:
+                with open(os.path.join(d, n), "rb") as f:
+                    if looks_like_wad(f.read(HDR)):
+                        names.append(n)
+            except OSError:
+                continue
+        if not names:
+            messagebox.showinfo(tr("info"), tr("dir_none"))
+            return
+        self.sources.append(("dir", d, names))
+        self.render_tree()
+        self.set_status("dir_info", os.path.basename(d.rstrip("/\\")) or d, len(names))
+
+    def open_iso(self):
+        p = filedialog.askopenfilename(title=tr("btn_iso"), filetypes=[("ISO", "*.iso *.ISO"), (tr("ft_all"), "*.*")])
+        if p:
+            self.open_iso_path(p)
+
+    def open_iso_path(self, p):
+        try:
+            game = IsoGame(p)
+        except ValueError:
+            messagebox.showerror(tr("open_fail"), tr("iso_bad"))
+            return
+        except Exception:
+            messagebox.showerror(tr("open_fail"), traceback.format_exc())
+            return
+        paks = [(name, part) for part, name, _l, _s in game.pak_list()]
+        if not paks:
+            game.close()
+            messagebox.showinfo(tr("info"), tr("iso_nopak"))
+            return
+        if p in self.isos:
+            self.isos[p].close()
+        self.isos[p] = game
+        self.sources = [s for s in self.sources if not (s[0] == "iso" and s[1] == p)]
+        self.sources.append(("iso", p, paks))
+        self.last_dir = os.path.dirname(p)
+        self.render_tree()
+        self.set_status("iso_info", os.path.basename(p), len(paks))
+
+    def open_path(self, p):
+        """Kolom path (cadangan kalau dialog file Wine bermasalah): .iso -> ISO, selain itu WAD."""
+        if p.lower().endswith(".iso"):
+            self.open_iso_path(p)
+        else:
+            self.open_wad_path(p)
+
+    # ---- daftar SBK ----
     @staticmethod
     def kind(e):
         if e.is_sbk:
@@ -1714,9 +2360,11 @@ class App(tk.Tk):
 
     def refresh(self):
         self.tree.delete(*self.tree.get_children())
+        if not self.doc:
+            return
         mode = FILTERS[self.filter.current()]
-        for i, e in enumerate(self.entries):
-            if mode == "flt_sbk" and not (e.is_sbk and has_audio(self.buf, e)):
+        for i, e in enumerate(self.doc.entries):
+            if mode == "flt_sbk" and not (e.is_sbk and has_audio(self.doc.buf, e)):
                 continue
             if mode == "flt_file" and not e.is_file:
                 continue
@@ -1733,59 +2381,10 @@ class App(tk.Tk):
 
     def selected(self):
         sel = self.tree.selection()
-        if not sel:
+        if not sel or not self.doc:
             messagebox.showinfo(tr("info"), tr("pick_file"))
             return None
-        return self.entries[int(sel[0])]
-
-    # ---- actions ----
-    def open_wad(self):
-        try:
-            p = filedialog.askopenfilename(
-                title=tr("open_title"), filetypes=[(tr("ft_all"), "*.*"), ("WAD", "*.wad")])
-        except Exception:
-            messagebox.showerror(tr("dlg_err"), traceback.format_exc())
-            return
-        if p:
-            self.open_path(p)
-
-    def open_path(self, p):
-        try:
-            if not p or not os.path.isfile(p):
-                messagebox.showerror(tr("err_title"), tr("not_found", p))
-                return
-            size = os.path.getsize(p)
-            if size > MAX_WAD_SIZE:
-                messagebox.showerror(tr("not_wad"), tr("too_big", size // (1024 * 1024)))
-                return
-            with open(p, "rb") as f:
-                head = f.read(HDR)
-                if not looks_like_wad(head):
-                    messagebox.showerror(tr("not_wad"), tr("not_gow"))
-                    return
-                f.seek(0)
-                self.buf = bytearray(f.read())
-            self.path = p
-            self.last_dir = os.path.dirname(p)
-            self.path_var.set(p)
-            self.entries = scan(self.buf)
-            self.dirty = False
-            self.refresh()
-            total = sum(1 for e in self.entries if e.is_sbk)
-            n = sum(1 for e in self.entries if e.is_sbk and has_audio(self.buf, e))
-            gname = GAMES[self.entries[0].game]["name"] if self.entries else "?"
-            if total > n:
-                self.set_status("opened_h", os.path.basename(p), gname, len(self.buf),
-                                len(self.entries), n, total - n)
-            else:
-                self.set_status("opened", os.path.basename(p), gname, len(self.buf),
-                                len(self.entries), n)
-            if not self.entries:
-                messagebox.showwarning(tr("no_entries_t"), tr("no_entries"))
-            elif n == 0:
-                messagebox.showinfo(tr("no_sbk_t"), tr("no_sbk"))
-        except Exception:
-            messagebox.showerror(tr("open_fail"), traceback.format_exc())
+        return self.doc.entries[int(sel[0])]
 
     def debug(self):
         if self.buf is None:
@@ -1844,51 +2443,110 @@ class App(tk.Tk):
             # lebih kecil/sama: isi nol, ukuran asli dipertahankan -> offset lain tidak bergeser
             blob, size_field = new + b"\x00" * (old_slot - len(new)), old
         else:
+            if self.doc.src:  # WAD di ISO tidak boleh berubah ukuran
+                messagebox.showerror(tr("bigger_t"), tr("e_iso_nogrow"))
+                return
             if not messagebox.askyesno(tr("bigger_t"), tr("bigger", len(new), old)):
                 return
             new_slot = (len(new) + ALIGN - 1) & ~(ALIGN - 1)
             blob, size_field = new + b"\x00" * (new_slot - len(new)), len(new)
         self.buf[e.data_off:e.data_off + old_slot] = blob
         struct.pack_into("<I", self.buf, e.size_off, size_field)
-        self.entries = scan(self.buf)
+        self.doc.entries = scan(self.buf)
         self.dirty = True
         self.refresh()
         self.set_status("file_replaced", e.name, len(new))
 
+    # ---- simpan ----
+    def _write(self, doc, path, backup):
+        made = False
+        if backup:
+            bak = path + ".bak"
+            if not os.path.exists(bak):
+                shutil.copy2(path, bak)
+                made = True
+        with open(path, "wb") as f:
+            f.write(doc.buf)
+        doc.dirty = False
+        return made
+
     def save(self):
-        """Tulis hasil edit ke file WAD asli; salinan asli disimpan sebagai .bak (sekali)."""
-        if self.buf is None:
-            messagebox.showinfo(tr("info"), tr("dbg_need"))
+        dirty = [d for d in self.docs.values() if d.dirty]
+        if not dirty:
+            messagebox.showinfo(tr("info"), tr("save_none"))
             return
-        try:
-            bak = self.path + ".bak"
-            made = not os.path.exists(bak)
-            if made:
-                shutil.copy2(self.path, bak)
-            with open(self.path, "wb") as f:
-                f.write(self.buf)
-            self.dirty = False
-            self.set_status("saved_status", os.path.basename(self.path))
-            messagebox.showinfo(tr("saved_t"), tr("saved_text", self.path,
-                                                  tr("bak_new", bak) if made else tr("bak_old", bak)))
-        except Exception:
-            messagebox.showerror(tr("save_fail"), traceback.format_exc())
+        lines = []
+        for d in dirty:
+            try:
+                if d.src:  # WAD di dalam ISO: tulis ke semua lokasi, backup dulu
+                    game, entry = d.src[1], d.src[2]
+                    offs = write_wad_to_iso(game, entry, d.buf)
+                    d.dirty = False
+                    lines.append(tr("iso_saved", len(offs), "\n".join("  0x%X" % o for o in offs),
+                                    backup_path(game.path)))
+                else:
+                    made = self._write(d, d.path, True)
+                    bak = d.path + ".bak"
+                    lines.append(tr("saved_text", d.path, tr("bak_new", bak) if made else tr("bak_old", bak)))
+            except ValueError as ex:
+                msg = str(ex)
+                if msg.startswith("check:"):
+                    messagebox.showerror(tr("save_fail"), tr("iso_check_fail", "0x%X" % int(msg[6:])))
+                elif msg == "size":
+                    messagebox.showerror(tr("save_fail"), tr("iso_size_fail"))
+                else:
+                    messagebox.showerror(tr("save_fail"), msg)
+                return
+            except Exception:
+                messagebox.showerror(tr("save_fail"), traceback.format_exc())
+                return
+        self.set_status("saved_status", ", ".join(os.path.basename(d.path) for d in dirty))
+        messagebox.showinfo(tr("saved_t"), "\n\n".join(lines))
 
     def save_as(self):
-        """Simpan hasil edit ke nama/lokasi lain; WAD asli tidak disentuh."""
-        if self.buf is None:
+        """Simpan WAD yang sedang dipilih ke file lain; sumber aslinya tidak disentuh."""
+        if self.doc is None:
             messagebox.showinfo(tr("info"), tr("dbg_need"))
             return
         try:
             p = filedialog.asksaveasfilename(
-                title=tr("saveas_title"), initialfile=os.path.basename(self.path))
+                title=tr("saveas_title"), initialfile=os.path.basename(self.doc.path))
             if not p:
                 return
             with open(p, "wb") as f:
-                f.write(self.buf)
-            self.dirty = False
+                f.write(self.doc.buf)
+            self.doc.dirty = False
             self.set_status("saved_status", os.path.basename(p))
             messagebox.showinfo(tr("saved_t"), tr("saved_as", p))
+        except Exception:
+            messagebox.showerror(tr("save_fail"), traceback.format_exc())
+
+    def restore_iso(self):
+        sel = self.stree.selection()
+        m = self.meta.get(sel[0], {}) if sel else {}
+        path = m.get("path") if m.get("kind") in ("iso", "pak") else m.get("iso")
+        if not path or path not in self.isos:
+            isos = [s[1] for s in self.sources if s[0] == "iso"]
+            path = isos[0] if len(isos) == 1 else None
+        if not path:
+            messagebox.showinfo(tr("info"), tr("restore_pick"))
+            return
+        if not os.path.exists(backup_path(path)):
+            messagebox.showinfo(tr("info"), tr("restore_none"))
+            return
+        if not messagebox.askyesno(tr("btn_restore"), tr("restore_ask")):
+            return
+        try:
+            self.isos[path].close()
+            n = restore_backup(path)
+            self.isos[path] = IsoGame(path)
+            for k in [k for k, d in self.docs.items() if d.src and d.src[1].path == path]:
+                if self.doc is self.docs[k]:
+                    self.doc = None
+                del self.docs[k]
+            self.refresh()
+            self.set_status("restore_ok", n)
+            messagebox.showinfo(tr("saved_t"), tr("restore_ok", n))
         except Exception:
             messagebox.showerror(tr("save_fail"), traceback.format_exc())
 
@@ -1920,7 +2578,7 @@ def main():
             save_lang(code)
         LANG = code
         app = App()
-        if len(sys.argv) > 1:
+        if len(sys.argv) > 1 and os.path.isfile(sys.argv[1]):
             app.after(200, lambda: app.open_path(sys.argv[1]))
         app.mainloop()
     except Exception:
